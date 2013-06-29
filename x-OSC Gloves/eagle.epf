@@ -381,7 +381,7 @@ UsedLibrary="/Applications/EAGLE-6.4.0/lbr/elektro/eib-busch-jaeger.lbr"
 
 [Win_1]
 Type="Control Panel"
-Loc="238 182 837 581"
+Loc="68 79 667 478"
 State=2
 Number=0
 
