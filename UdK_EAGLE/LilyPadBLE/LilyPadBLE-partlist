@@ -1,0 +1,78 @@
+Partlist
+
+Exported from Lilypad_Kompakt-V25.sch at 01.07.2013 12:57:29
+
+EAGLE Version 6.4.0 Copyright (c) 1988-2013 CadSoft
+
+Assembly variant: 
+
+Part        Value                     Device                    Package                             Library                       Sheet
+
+C1          0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C2          47uF                      CAP_POL3528               EIA3528                             SparkFun                      1
+C3          10uF                      C-EUC0805                 C0805                               rcl                           1
+C4          0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C5          22uF                      C-EUC0805                 C0805                               rcl                           1
+C6          0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C7          22uF                      C-EUC0805                 C0805                               rcl                           1
+C8          0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C9          4.7uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C10         4.7uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C11         10uF                      C-EUC0805                 C0805                               rcl                           1
+C12         0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C13         0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C14         0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C15         0.1uF                     CAP0603-CAP               0603-CAP                            SparkFun                      1
+C17         1uF                       CAP0603-CAP               0603-CAP                            SparkFun                      1
+C20         22uF                      C-EUC0805                 C0805                               rcl                           1
+C22         22uF                      C-EUC0805                 C0805                               rcl                           1
+CC-DEBUGGER CONN_5-2-FTSH-V           CONN_5-2-FTSH-V           FTSH-105-DV                         pel_misc                      1
+D1          Status                    LED0603                   LED-0603                            SparkFun                      1
+D2          Status                    LED0603                   LED-0603                            SparkFun                      1
+D3          MBR0520LT                 MBR0520LT                 SOD123                              Lilypad_Kompakt-V25           1
+D4          Yellow                    LED0603                   LED-0603                            SparkFun                      1
+GND         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+JP1         ASP_CON                   ARDUINO_SERIAL_PROGRAMSMD 1X06-SMD                            SparkFun                      1
+JP4         LiPo                      M02-JST-2MM-SMT           JST-2-SMD                           SparkFun                      1
+L1          10uH                      CBC2518T100ML5650M        CBC2518                             Lilypad_Kompakt-V25           1
+R1          10K                       RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R2          1k                        RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R3          1k                        RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R4          51.1k                     RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R5          1k                        RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R6          10K                       RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R7          1k                        RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R8          10K                       RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R9          10k                       RESISTOR0603-RES          0603-RES                            SparkFun                      1
+R10         30.9k                     RESISTOR0603-RES          0603-RES                            SparkFun                      1
+S1          TAC_SWITCH                TAC_SWITCHSMD             TACTILE_SWITCH_SMD                  SparkFun                      1
+S2          On/Off                    AYZ0202                   AYZ0202                             SparkFun                      1
+S3          On/Off                    AYZ0202                   AYZ0202                             SparkFun                      1
+U$1         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$2         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$3         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$4         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$5         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$6         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$7         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$8         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$9         LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$10        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$11        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$12        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$13        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$14        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$15        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$16        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$17        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$18        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$19        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$20        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$21        LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_SEWTAP1 LILYPAD-WEARABLES_PETAL-MOD-1-2SIDE Kopie_von_Lilypad_Kompakt-V25 1
+U$22        LM2733                    LM2733                    SPARKFUN_SOT23-5                    Lilypad_Kompakt-V25           1
+U1          ATMEGA328                 ATMEGA168                 TQFP32-08                           SparkFun                      1
+U2          BLE112-A                  BLE112-A                  BLE112-A                            sf-bluegiga                   1
+U3          MCP73831                  MCP73831                  SOT23-5                             SparkFun                      1
+U4          MIC5205-3.3               V_REG_LDOSMD              SOT23-5                             SparkFun                      1
+U5          TXB0102                   TXB0102DCU                TI_DCU                              Lilypad_Kompakt-V25           1
+Y1          RESONATORSMD              RESONATORSMD              RESONATOR-SMD                       SparkFun                      1
