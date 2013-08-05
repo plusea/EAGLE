@@ -1292,6 +1292,7 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <part name="R8" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="R9" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="R10" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
+<part name="R11" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="R15" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="R16" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="R17" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
@@ -1309,6 +1310,7 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <part name="PAD10" library="wirepad" deviceset="3,81/1,4" device=""/>
 <part name="PAD11" library="wirepad" deviceset="3,81/1,4" device=""/>
 <part name="PAD12" library="wirepad" deviceset="3,81/1,4" device=""/>
+<part name="PAD13" library="wirepad" deviceset="3,81/1,4" device=""/>
 <part name="PAD15" library="wirepad" deviceset="3,81/1,4" device=""/>
 <part name="PAD16" library="wirepad" deviceset="3,81/1,4" device=""/>
 </parts>
@@ -1330,6 +1332,7 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <instance part="R8" gate="G$1" x="71.12" y="-7.62"/>
 <instance part="R9" gate="G$1" x="71.12" y="-10.16"/>
 <instance part="R10" gate="G$1" x="71.12" y="-12.7"/>
+<instance part="R11" gate="G$1" x="71.12" y="-15.24"/>
 <instance part="R15" gate="G$1" x="53.34" y="78.74" rot="R90"/>
 <instance part="R16" gate="G$1" x="58.42" y="78.74" rot="R90"/>
 <instance part="R17" gate="G$1" x="63.5" y="78.74" rot="R90"/>
@@ -1347,6 +1350,7 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <instance part="PAD10" gate="1" x="15.24" y="15.24" rot="MR180"/>
 <instance part="PAD11" gate="1" x="15.24" y="7.62" rot="MR180"/>
 <instance part="PAD12" gate="1" x="15.24" y="0" rot="MR180"/>
+<instance part="PAD13" gate="1" x="15.24" y="-7.62" rot="MR180"/>
 <instance part="PAD15" gate="1" x="15.24" y="-30.48" rot="MR180"/>
 <instance part="PAD16" gate="1" x="15.24" y="-38.1" rot="MR180"/>
 </instances>
@@ -1423,6 +1427,26 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <wire x1="25.4" y1="7.62" x2="17.78" y2="7.62" width="0.1524" layer="91"/>
 </segment>
 </net>
+<net name="N$10" class="0">
+<segment>
+<pinref part="U$3" gate="G$1" pin="14"/>
+<pinref part="R10" gate="G$1" pin="2"/>
+<pinref part="PAD12" gate="1" pin="P"/>
+<wire x1="17.78" y1="0" x2="22.86" y2="0" width="0.1524" layer="91"/>
+<wire x1="22.86" y1="0" x2="22.86" y2="-12.7" width="0.1524" layer="91"/>
+<wire x1="22.86" y1="-12.7" x2="76.2" y2="-12.7" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$11" class="0">
+<segment>
+<pinref part="U$3" gate="G$1" pin="15"/>
+<pinref part="R11" gate="G$1" pin="2"/>
+<wire x1="76.2" y1="-15.24" x2="20.32" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="20.32" y1="-15.24" x2="20.32" y2="-7.62" width="0.1524" layer="91"/>
+<pinref part="PAD13" gate="1" pin="P"/>
+<wire x1="20.32" y1="-7.62" x2="17.78" y2="-7.62" width="0.1524" layer="91"/>
+</segment>
+</net>
 <net name="VDD" class="0">
 <segment>
 <pinref part="R1" gate="G$1" pin="1"/>
@@ -1444,7 +1468,9 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <wire x1="66.04" y1="-7.62" x2="66.04" y2="-10.16" width="0.1524" layer="91"/>
 <pinref part="R10" gate="G$1" pin="1"/>
 <wire x1="66.04" y1="-10.16" x2="66.04" y2="-12.7" width="0.1524" layer="91"/>
-<wire x1="66.04" y1="-12.7" x2="66.04" y2="-20.32" width="0.1524" layer="91"/>
+<pinref part="R11" gate="G$1" pin="1"/>
+<wire x1="66.04" y1="-12.7" x2="66.04" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="66.04" y1="-15.24" x2="66.04" y2="-20.32" width="0.1524" layer="91"/>
 <pinref part="U$3" gate="G$1" pin="17"/>
 <wire x1="66.04" y1="-20.32" x2="76.2" y2="-20.32" width="0.1524" layer="91"/>
 <wire x1="66.04" y1="-20.32" x2="58.42" y2="-20.32" width="0.1524" layer="91"/>
@@ -1546,11 +1572,17 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <segment>
 <pinref part="R15" gate="G$1" pin="1"/>
 <wire x1="53.34" y1="73.66" x2="55.88" y2="73.66" width="0.1524" layer="91"/>
-<pinref part="U$2" gate="G$1" pin="18"/>
-<wire x1="0" y1="35.56" x2="58.42" y2="35.56" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="35.56" x2="58.42" y2="38.1" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="38.1" x2="55.88" y2="38.1" width="0.1524" layer="91"/>
-<wire x1="55.88" y1="38.1" x2="55.88" y2="73.66" width="0.1524" layer="91"/>
+<wire x1="55.88" y1="73.66" x2="55.88" y2="30.48" width="0.1524" layer="91"/>
+<pinref part="U$2" gate="G$1" pin="16"/>
+<wire x1="55.88" y1="30.48" x2="0" y2="30.48" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$19" class="0">
+<segment>
+<pinref part="U$2" gate="G$1" pin="17"/>
+<wire x1="0" y1="33.02" x2="58.42" y2="33.02" width="0.1524" layer="91"/>
+<pinref part="R16" gate="G$1" pin="1"/>
+<wire x1="58.42" y1="33.02" x2="58.42" y2="73.66" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$15" class="0">
@@ -1583,34 +1615,6 @@ Source: http://www.seoulsemicon.co.kr .. F50360.pdf</description>
 <wire x1="73.66" y1="30.48" x2="73.66" y2="20.32" width="0.1524" layer="91"/>
 <pinref part="U$3" gate="G$1" pin="1"/>
 <wire x1="73.66" y1="20.32" x2="76.2" y2="20.32" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$12" class="0">
-<segment>
-<pinref part="U$2" gate="G$1" pin="16"/>
-<wire x1="0" y1="30.48" x2="63.5" y2="30.48" width="0.1524" layer="91"/>
-<pinref part="R17" gate="G$1" pin="1"/>
-<wire x1="66.04" y1="30.48" x2="63.5" y2="30.48" width="0.1524" layer="91"/>
-<wire x1="63.5" y1="30.48" x2="63.5" y2="73.66" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$19" class="0">
-<segment>
-<pinref part="R16" gate="G$1" pin="1"/>
-<wire x1="58.42" y1="73.66" x2="60.96" y2="73.66" width="0.1524" layer="91"/>
-<wire x1="60.96" y1="73.66" x2="60.96" y2="33.02" width="0.1524" layer="91"/>
-<pinref part="U$2" gate="G$1" pin="17"/>
-<wire x1="60.96" y1="33.02" x2="0" y2="33.02" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$20" class="0">
-<segment>
-<pinref part="PAD12" gate="1" pin="P"/>
-<wire x1="17.78" y1="0" x2="22.86" y2="0" width="0.1524" layer="91"/>
-<pinref part="U$3" gate="G$1" pin="14"/>
-<pinref part="R10" gate="G$1" pin="2"/>
-<wire x1="22.86" y1="-12.7" x2="76.2" y2="-12.7" width="0.1524" layer="91"/>
-<wire x1="22.86" y1="0" x2="22.86" y2="-12.7" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
