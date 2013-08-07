@@ -1,0 +1,952 @@
+// Verwaltung von Brückenklemmen (nur für Devices KLEMME*BRUECKE in Bibliothek e-klemmen.lbr)
+
+// Gate-Namen der Brücken-Devices müssen alphabetisch so geordnet sein, dass ihre Pins
+// der Reihe nach 1.x, 2.x etc. sind
+
+// todo
+// Anzeigen, welcher Klemmenblock gerade bearbeitet wird
+
+string Version = "Version 1.01";
+
+// History
+// 1.01 -- 2009-10-01
+// nicht benötigte "\t\t" in Kopfzeilen von dlgDialog() entfernt
+//
+
+#require 4.9206
+
+#usage "<b>Brückenklemmen-Verwaltung: Brücken eintragen und ändern</b>\n<p> "
+
+"Brückenklemmen sind Bauteile mit Einzelklemmen, die jeweils zwei Kontakte "
+"mit Anschlussmöglichkeit für Drähte haben. Zusätzlich können die Klemmen "
+"untereinander mit gesteckten Brückenkämmen o.ä. verbunden werden. Mit diesem "
+"User-Language-Programm (ULP) definieren Sie auf bequeme Weise, welche Klemmen "
+"innerhalb eines Klemmenblocks gebrückt werden sollen. Die Brückendefinitionen "
+"werden als Liste in einer Datei (schaltungsname.brk) ausgegeben. Außerdem "
+"wird eine Log-Datei (schaltungsname.log) angelegt, aus der mögliche Probleme "
+"hervorgehen. Die Log-Datei wird gelöscht, nachem die EAGLE-Sitzung beendet ist.<p> "
+"Die erzeugte Liste (schaltungsname.brk) kann in einem Tabellenkalkulationsprogramm "
+"weiter verarbeitet oder mit Hilfe von <i>e-makelist.ulp</i> direkt in die "
+"Schaltungszeichnung importiert werden. <p>"
+
+"<author>Author: support@cadsoft.de</author>"
+
+/////////////////////////////////////////////////////////////////////////////////
+// Vom Benutzer zu ändern:
+// Wenn verdrahteten Verbindungen keine Verweise bekommen sollen, setzen Sie den
+// Wert für ExcludeDrahtverbindungen in der folgenden Zeile auf 1;
+int ExcludeDrahtverbindungen = 0;
+/////////////////////////////////////////////////////////////////////////////////
+
+string s, cmd, f, LogCmd, DoCmd, ListCmd;
+string PartDatabase[], CurrentPart;
+numeric string ChangeString, SheetsUsedInEdit[];
+int maxklemmen, LogOn, ErrOn, CurrentPartIndex;
+
+string scrfile, listfile, errorfile, pinfile, vbdfile, klpfile, kapfile, brpfile, pfad;
+numeric string sh, PartPin, SigName, col, row, PartName, PinName;
+numeric string pindatabase[], b[];
+string PartPinSep = " ";
+int    YRef[];
+int    distY, netnr, n, i;
+// Debug
+string DebugString;
+// Variablen für main
+int SelAll = -1, SelConnected = -1, Sort = 0, SortAll = 0, NrLinesListAll;
+numeric string listall[], listsel[], listundo[], listundoOben[];
+string h[];
+// Header-Variablen -------------------------------------------------------------------------------------------
+string head [], SelParam[], ChangeParam[];
+int NrHeader; // Zahl der Rubriken
+// head [] enthält ListHeader-Einträge:
+//             head[Draehte]..   v
+enum                          {Draehte, Bruecken};
+numeric string ListHeader =  "Drähte       \tBrücken";
+
+enum                            {Name, Anz, Verwendet, Verdrahtet};
+numeric string ListHeaderMain =  "Name\tAnz.\tVerwendet\tVerdrahtet";
+// Ende Header-Variablen --------------------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+string HelpText =
+
+
+"<b>Brückenklemmen-Verwaltung: Brücken eintragen und ändern</b><p>"
+
+"Brückenklemmen sind Bauteile mit Einzelklemmen, die jeweils zwei Kontakte "
+"mit Anschlussmöglichkeit für Drähte haben. Zusätzlich können die Klemmen "
+"untereinander mit gesteckten Brückenkämmen o.ä. verbunden werden. Mit diesem "
+"User-Language-Programm (ULP) definieren Sie auf bequeme Weise, welche Klemmen "
+"innerhalb eines Klemmenblocks gebrückt werden sollen. Die Brückendefinitionen "
+"werden als Liste in einer Datei (schaltungsname.brk) ausgegeben. Außerdem "
+"wird eine Log-Datei (schaltungsname.log) angelegt, aus der mögliche Probleme "
+"hervorgehen. Die Log-Datei wird gelöscht, nachem die EAGLE-Sitzung beendet ist.<br> "
+"Die erzeugte Liste (schaltungsname.brk) kann in einem Tabellenkalkulationsprogramm "
+"weiter verarbeitet oder mit Hilfe von <i>e-makelist.ulp</i> direkt in die "
+"Schaltungszeichnung importiert werden. <p>"
+
+"<b>Klemmenbibliothek</b><p>"
+
+"Dieses Programm berücksichtigt nur Brückenklemmen, wie sie in der "
+"Bibliothek e-klemmen.lbr unter den Device-Namen KLEMME*BRUECKE definiert sind. "
+"In der Schaltung muss der Bauteilname mit X beginnen, und in der Bibliothek "
+"muss der Namensbestandteil <i>BRUECKE</i> vorhanden sein. "
+"In der Bibliothek e-klemmen.lbr befinden sich vordefinierte Brückenklemmen. "
+"Bitte lesen Sie die Bibliotheksbeschreibung (z.B. im Control-Panel), wenn Sie "
+"eigene Brückenklemmen definieren wollen.<p> "
+
+"<b>Prinzip</b><p>"
+
+"Klemmen werden behandelt, wie jedes andere Bauteil auch: Kontakte, die mit "
+"anderen verbunden sind, erscheinen im Klemmenplan. Eine Verbindung entsteht, "
+"wenn die Kontakte über eine Netzlinie verbunden sind oder wenn an den Kontakten "
+"jeweils ein Netz mit gleichem Namen hängt. Letzteres ist insbesondere dann "
+"der Fall, wenn Kontakte auf unterschiedlichen Schaltplanseiten verbunden sind.<p> "
+
+"Brückenklemmen bieten darüber hinaus eine weitere Möglichkeit, Verbindungen "
+"innerhalb desselben Klemmenblocks zu definieren. Man bringt einen "
+"Verweis (Referenz) im Brückenklemmen-Symbol an, der auf die vorherige bzw. nächste "
+"Klemme zeigt, mit der die Klemme verbunden werden soll. Damit vermeidet man ein "
+"Wirrwarr von gezeichneten Brücken bei größeren Plänen. Die Verweise verwenden "
+"Attribute, die in der Bibliothek festgelegt sind. Der Benutzer hat damit aber "
+"nichts zu tun, solange er für die Definition der Brücken dieses ULP verwendet.<p> "
+
+"<b>Was steht im Klemmenplan und im Brückenplan?</b><p>"
+
+"Der Klemmenplan stellt alle Draht- und Kabelverbindungen in einer Liste dar. "
+"Der Brückenplan enthält die (üblicherweise mit Brückenkämmen ausgeführten) "
+"Verbindungen innerhalb eines Klemmenblocks, die mit Hilfe dieses Programms "
+"erstellt wurden.<p> "
+
+"Werden Kontakte eines Brückenklemmenblocks über ein Netz verbunden, erscheint diese "
+"Verbindung im Klemmenplan als Drahtverbindung. Sie sollten das dann tun, wenn "
+"Sie darauf hinweisen wollen, dass hier tatsächlich ein Draht von einer Klemme "
+"zur anderen verlegt werden soll.<p> "
+
+"Werden Kontakte eines Brückenklemmenblocks über Klemmen-Referenzen (mit diesem "
+"Programm) verbunden, erscheint diese Verbindung im Brückenplan (ebenso wie "
+"Verbindungen zwischen unterschiedlichen Klemmenblöcken, etwa eine Klemme "
+"von X1 mit einer von X2).<p> "
+
+"Falls Kontakte auf beide Arten verbunden sind (was keinen Sinn macht), "
+"erscheinen sie im Klemmenplan und im Brückenplan.<p> "
+
+"<b>Wie werden Brücken im Stromlaufplan dargestellt?</b><p>"
+
+"Im Brückenklemmen-Symbol weisen (maximal) zwei Zahlen auf die nächsten Klemmen hin, "
+"mit denen es verbunden ist. Da Referenzverbindungen nicht über die <i>Draht</i>-Anschlüsse "
+"realisiert werden, erscheint als Referenz nicht der jeweilige Kontaktname "
+"(1.1, 1.2 etc.), sondern die Klemmennummer (1, 2, 3 etc.). Klemme 5 etwa "
+"ist die Klemme mit den Kontakten 5.1 und 5.2.<p> "
+
+"Beispiel: In einem Block mit sechs Einzelklemmen, sollen die Klemmen 1, 3 und 5 "
+"miteinander verbunden sein: Klemme 1 verweist auf 3, Klemme 3 verweist auf 1 und 5, "
+"und Klemme 5 verweist auf Klemme 3.<p> "
+
+"<b>Bedienung</b><p>"
+
+"In jeder Programmsitzung können Sie nur die Brücken eines Klemmenblocks (also etwa X1) "
+"bearbeiten.<p> "
+
+"Typischer Ablauf einer Programmsitzung:<p>"
+
+"<b>Log-Datei:</b> Dieser Button öffnet ein Textfenster, in dem Sie die vorhandenen "
+"Draht- und Referenz-Brücken sowie Warnungen zu eventuellen Fehlern finden.<p> "
+
+"<b>Doppelklick auf obere Liste:</b> Wählen Sie den zu bearbeitenden Klemmenblock. "
+"Dargestellt sind die Anzahl und die Nummern der in der Schaltung platzierten "
+"Klemmen sowie die Klemmen, die mit Drähten (Netzen) verbunden sind. "
+"Mit dem Doppelklick wird dieser Klemmenblock in die untere Liste zur Bearbeitung "
+"übertragen.<p> "
+
+"<b>Untere Liste:</b> Links sind Drahtverbindungen dargestellt, sie können nicht "
+"verändert werden (nur in der Schaltung). Rechts sind die Einzelbrücken "
+"in jeweils einer Zeile dargestellt.<p> "
+
+"<b>Doppelklick auf untere Liste:</b> Die verbundenen Klemmen einer Einzelbrücke "
+"wandern in das Editier-Fenster (Verbinden). Dort können Sie eintragen, "
+"welche Klemmen verbunden werden sollen (durch Leerzeichen getrennt). "
+"Die Eingabetaste oder ein Klick auf <b>Anwenden</b> ändert die selektierte "
+"Zeile entsprechend. Falls Sie Klemmen gewählt haben, die nicht in der "
+"Schaltung platziert sind, erscheint eine Fehlermeldung.<p> "
+
+"<b>Speichern:</b> Dieser Button beendet das Programm und führt die Änderungen "
+"an der zuletzt bearbeiteten Klemme durch. Der aktuelle Brückenplan "
+"wird als schaltungsname.brk abgespeichert, zusätzlich die Log-Datei "
+"(*.log) und eine Script-Datei (*.scr), aus der die EAGLE-Befehle zur Änderung "
+"der Referenzen hervorgehen. Um den endgültigen Brückenplan für ihre "
+"Projektunterlagen zu erstellen, sollten Sie das Programm starten und "
+"ohne eine Änderung durchzuführen den Button Speichern betätigen, dann "
+"ist die Liste richtig sortiert.<p> "
+
+"<b>Undo:</b> Dieser Button bringt nach einer Änderung den letzten Zustand in die "
+"untere Liste (nur eine Undo-Stufe).<p> "
+
+"<b>Unbenutzte:</b> Dieser Button bringt alle Klemmen in das Editier-Feld, die "
+"als Eingabe möglich sind, da sie gegenwärtig keiner anderen Brücke angehören. "
+"Am besten, sie betätigen diesen Button und löschen dann die Klemmen heraus, "
+"die nicht mit der zu erstellenden Brücke verbunden werden sollen.<p> "
+
+"<b>Löschen:</b> Löscht eine komplette Brückenzeile.<p> "
+
+"<b>Neu:</b> Erzeugt eine neue Brückenzeile, in die Sie den Inhalt des Editier-Fensters "
+"übertragen können.<p> "
+
+"<b>Abbrechen:</b> Programm ohne Änderungen verlassen."
+;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void SetFileNames(void) { // in Schematic-Kontext aufrufen
+
+  if (!schematic) {
+     // dlgMessageBox("Dieses Programm muss vom Schaltplan-Editor aus aufgerufen werden");
+     exit(1);
+   }
+  schematic(SCH) {
+    scrfile   = filesetext(SCH.name, ".scr");
+    errorfile = filesetext(SCH.name, ".log");
+    listfile  = filesetext(SCH.name, ".brk");
+    }
+}
+
+string StripWhiteSpace(string s) { // mit Zusatz: Doppel-Whitespaces im Inneren werden 1 Whitespace
+  int i, n;
+  string t;
+
+  while (s && isspace(s[0]))
+        s = strsub(s, 1);
+  while (s && isspace(s[strlen(s) - 1]))
+        s = strsub(s, 0, strlen(s) - 1);
+// Doppel-Blanks
+  for (i = 0; i < strlen(s); i++) {
+      if   (!isspace(s[i])) t[n++] = s[i];
+      else {
+         if ((strlen(s) > i+1) && isspace(s[i+1]));
+         else t[n++] = s[i];
+         };
+      }
+  s = t;
+
+  return s;
+}
+
+string SortBlankSeparatedString(string s) {
+  int nb;
+  numeric string b[];
+  s = StripWhiteSpace(s);
+  nb = strsplit(b, s, ' ');
+  sort(nb, b);
+  s = strjoin(b, ' ');
+  return s;
+}
+
+// Lösche Mehrfacheinträge aus blanksepariertem String und sortiere
+string DelMultiples(string st) {
+  string s, h[], ht[];
+  int i, n, np;
+  st = SortBlankSeparatedString(st);
+  np = strsplit(h, st, ' ');
+  for (i = 0; i < np; i++) {
+      ht[n] = h[i];
+      if (ht[n] == h[i+1]) {
+         i++;
+         }
+      n++;
+      }
+  s = strjoin(ht, ' ');
+  return StripWhiteSpace(s);
+}
+
+// Liefert einen kommaseparierten String mit allen verdrahteten Brücken eines Klemmenblocks
+// Für Log werden die Brücken nach Netzen getrennt ausgegeben
+string GetConnectedOnePart(string pname) {
+  int klnr, nrnetpins;
+  string s, t, connects, allconnects;
+  schematic(SCH) {
+    SCH.nets(N) {
+       nrnetpins = 0;
+       N.pinrefs(P) {
+         if (P.part.name == pname && P.pin.contact) {
+            nrnetpins++;
+            if (nrnetpins == 2) {
+               sprintf(s, "%s\tNetz: %s\tKlemmen: ", P.part.name, N.name); LogCmd += s;
+               break;
+               }
+            }
+         }
+       t = "";  connects = ""; nrnetpins = 0;
+       N.pinrefs(P) {
+         s = "";
+         if (P.part.name == pname && P.pin.contact) {
+             if(strtol(P.pin.contact.pad.name)) klnr = strtol(P.pin.contact.pad.name);
+             else sprintf(s, "\n%s: Fehler in Bibliothek! Pad-Name muss mit Ziffer beginnen!\n", P.pin.contact.pad.name); LogCmd += s;
+             sprintf(s, "%d ", klnr); connects += s; t += s; // nur wegen \n
+             nrnetpins++;
+             }
+         }
+      if (nrnetpins == 1) connects = ""; // nur ein Pin an Netz
+      LogCmd += SortBlankSeparatedString(connects);
+      if (t && nrnetpins > 1) LogCmd += "\n";
+      allconnects += " " + connects;
+      }
+    }
+  return SortBlankSeparatedString(allconnects);
+}
+
+void PackListsel (int ix, int pos, string s) {
+  int np;
+  if (ix < 0 || pos < 0) return;
+  numeric string h[];
+  strsplit(h, listsel[ix], '\t');
+  h[pos] = s;
+  listsel[ix] = strjoin(h, '\t');
+}
+
+string UnpackListsel (int ix, int pos) {
+  if (ix < 0) return "";
+  numeric string h[];
+  strsplit(h, listsel[ix], '\t');
+  return h[pos];
+}
+
+void PackListall (int ix, int pos, string s) {
+  int np;
+  if (ix < 0 || pos < 0) return;
+  numeric string h[];
+  strsplit(h, listall[ix], '\t');
+  h[pos] = s;
+  listall[ix] = strjoin(h, '\t');
+}
+
+string UnpackListall (int ix, int pos) {
+  if (ix < 0) return "";
+  numeric string h[];
+  strsplit(h, listall[ix], '\t');
+  return h[pos];
+}
+
+int IsInBlankStr (string item, string st) { // ist item in blanksep. String st vorhanden?
+  int i, np;
+  numeric string h[];
+  st = StripWhiteSpace(st);
+  np = strsplit(h, st, ' ');
+  for (i = 0; i < np; i++) {
+      if (item == h[i]) return 1;
+      }
+  return 0;
+}
+
+// Löscht Edit-Liste
+void DelListsel(void) {
+  for (i = 0; i < maxklemmen; i++) {
+      listsel[i] = "";
+      }
+}
+
+// Ref-Verbindungen für Editierliste erstellen: blank/tab separated string (ordered)
+// 1 2 5 \n 4 6     Zeilen mit \t getrennt
+string GetConnectedRefwise(string pname){
+  numeric string s, sa, klemmenused[], ku, c1, c2, bridges[], h[], lastline[], prevline[];
+  int i, j, k, u, v, w, np, np1, np2, bx, found;
+  schematic(SCH) {
+    SCH.sheets(SH) {
+        SH.parts(P) {
+          if (P.name == pname) {
+              if (LogOn) LogCmd += P.name + " ";
+              np = strsplit(klemmenused, StripWhiteSpace(lookup(PartDatabase, P.name, "Verwendet", '\t')) ,' ');
+              i = 0; bx = 0; found = 0;// Brückenindex, trennt Einzelpotentiale
+              for (i = 0; i < np; i++) {
+                  ku = klemmenused[i];
+                  c1 = P.attribute[klemmenused[i]+"1"];
+                  c2 = P.attribute[klemmenused[i]+"2"];
+                  if (P.attribute[klemmenused[i]+"1"] || P.attribute[klemmenused[i]+"2"]) {
+                     sprintf(s, "%d: %s %s %s\n", bx, ku, c1, c2);
+                     sprintf(s, "%s %s %s", ku, c1, c2);
+                     if (StripWhiteSpace(s))
+                        bridges[bx++] = StripWhiteSpace(s);
+                     }
+                  }
+              // bx Zahl der Klemmen mit Ref (höchster Index ist bx-1); max drei Klemmen pro Eintrag
+              for (j = bx-1; j > 0; j--) { // Fasse Potentiale in bridges[] zusammen
+                  np1 = strsplit(lastline, bridges[j], ' '); // bis zu drei Klemmen in lastline
+                  v = j - 1;
+                  while (v >= 0) { // vorherige Zeilen
+                    strsplit(prevline, bridges[v], ' ');
+                    w = 0;
+                    while(prevline[w]) {
+                      u = 0;
+                      while (lastline[u]) {
+                        if (lastline[u] == prevline[w]) {
+                           bridges[v] += " " + StripWhiteSpace(bridges[j]);
+                           bridges[j] = "";
+                           found = 1;
+                           break;
+                           }
+                        u++;
+                        }
+                      if (found) break;
+                      w++;
+                      }
+                    v--;
+                    }
+                  } // Ende Zusammenfassen der Potentiale (Mehrfacheinträge hier noch möglich)
+              i = 0; n = 0;
+              while (h[i]) h[i++] = "";
+              for (i = 0; i < maxklemmen; i++) {
+                  if (StripWhiteSpace(bridges[i])){
+                     h[n] = DelMultiples(bridges[i]);
+                     n++;
+                     }
+                  }
+              sort(n, h);
+              i = 0; s = "";
+              while (StripWhiteSpace(h[i])) {
+                h[i] = DelMultiples(h[i]);
+                s += h[i] + "\n";
+                if (LogOn) LogCmd += " : " + h[i];
+                i++;
+                }
+              if (LogOn) LogCmd += "\n";
+              }
+        }
+     }
+   }
+  return s;
+}
+
+// Editier-Liste (Drähte) für einen Klemmenblock erstellen: blank/tab separated string (ordered)
+// 1 2 5 \n 4 6     Zeilen mit \t getrennt
+string GetConnectedNetwise(string pname){
+  int klnr, nrnetpins;
+  string s, t, connects, allconnects;
+  schematic(SCH) {
+    SCH.nets(N) {
+       t = "";  connects = ""; nrnetpins = 0;
+       N.pinrefs(P) {
+         s = "";
+         if (P.part.name == pname && P.pin.contact) {
+             klnr = strtol(P.pin.contact.pad.name); // trennt .x ab von x.x
+             sprintf(s, "%d ", klnr); connects += s; t += s; // t nur wegen \n erforderlich
+             nrnetpins++;
+             }
+         }
+      connects = SortBlankSeparatedString(connects);
+      if (nrnetpins == 1) connects = ""; // nur ein Pin an Netz
+      if (t && nrnetpins > 1) {
+         allconnects += connects + "\n";
+         }
+      }
+    }
+  return allconnects;
+}
+
+// Ermittelt Wired-Brücken an und schreibt Log nach Startvorgang
+// Part \t Klemmen
+// wobei Klemmen blanksepariert sind (alle fest verdrahteten Klemmen)
+// z. B.:    X1    1 3 4 5 9
+void GetConnectedAllParts(void) {
+  int i, np;
+  string h[];
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  LogCmd += "Mit Netzen realisierte Brücken: nicht mit diesem ULP zu verändern!\n";
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  while (listall[i]) {
+    np = strsplit(h, listall[i], '\t');
+//  Wired Connections
+    h[Verdrahtet] = DelMultiples((GetConnectedOnePart(h[Name])));
+    listall[i] = strjoin(h, '\t');
+    i++;
+    }
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  LogCmd += "Mit Referenzen realisierte Brücken: mit diesem ULP zu verändern!\n";
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+//  Ref Connections
+  i = 0;
+  while (listall[i]) {
+    np = strsplit(h, listall[i], '\t');
+    LogOn = 1;
+    GetConnectedRefwise(h[Name]);
+    LogOn = 0;
+    i++;
+    }
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+}
+
+
+int CheckOKBridgeLine(string st) { // lässt nur in schematic vorhandene Klemmen zu
+  int i, np;
+  string s, h[];
+  s = StripWhiteSpace(st);
+  if (st == "") return 1;
+  char c;
+  for (i = 0; i < strlen(s); i++) {
+      c = s[i];
+      if (isdigit(c) || c == ' ') {
+         }
+      else return 0;
+      }
+  np = strsplit(h, st, ' ');
+  if (np == 1) return 0;
+  for (i = 0; i < np; i++) {
+      if (!IsInBlankStr(h[i], UnpackListall(CurrentPartIndex, Verwendet))) {
+            return 0;
+            }
+      }
+  return 1;
+}
+
+void MakeEditListOnePart(int Sel) {
+  int i, ErrPrinted;
+  string wirelines[], reflines[], h[], x[];
+  if (Sel < 0) return;
+  strsplit(h, listall[Sel], '\t');
+  CurrentPartIndex = Sel;
+  CurrentPart = h[Name];
+  DelListsel();
+  strsplit(wirelines, GetConnectedNetwise(h[Name]), '\n'); // alle Br. als Einzelzeilen
+  strsplit(reflines,  GetConnectedRefwise(h[Name]), '\n'); // alle Br. als Einzelzeilen
+  while(wirelines[i] || reflines[i]) {
+    listsel[i] = DelMultiples(wirelines[i]) + "\t" + DelMultiples(reflines[i]);
+    if (!CheckOKBridgeLine(reflines[i])) {
+       if (ErrOn && !ErrPrinted) {
+          dlgMessageBox( "<b>Unzulässige Brückenbezeichnung, siehe Log-Liste!</b><p>"
+                         "Bitte tragen Sie in die Brückenzeilen nur erlaubte Bezeichnungen ein "
+                         "und speichern Sie das Ergebnis ab!"
+                       );
+          ErrPrinted = 1;
+          }
+       if (!ErrOn)
+       if (strsplit(x, reflines[i], ' ') == 1)
+          LogCmd += UnpackListall(Sel, Name) + ": " + reflines[i] +
+                  "\tNur ein Klemmenverweis (min. 2 erforderlich)!\n";
+       else
+          LogCmd += UnpackListall(Sel, Name) + ": " + reflines[i] +
+                  "\tNicht alle Klemmen in Schaltung vorhanden!\n";
+       }
+    i++;
+    }
+  return;
+}
+
+// void MakeEditListPerName(string pname) {
+//   int i;
+//   pname = StripWhiteSpace(pname);
+//   while (UnpackListall(i, Name)) {
+//     if (pname == UnpackListall(i, Name)) {
+//        MakeEditListOnePart(i);
+//        SelAll = i;
+//        return;
+//        }
+//     i++;
+//     }
+//   dlgMessageBox("<b>Kein Klemmenblock mit diesem Namen vorhanden!</b><p>");
+//   return;
+// }
+
+// Sammle Brückenklemmen (Part-Name: X...; Device-Name: ..BRUECKE..)
+// Fülle obere Liste und lege identische Datenbank mit Header an (PartDatabase[])
+void CollectX(void) {
+  numeric string s, s1, s2, s3, sh0, sh;
+  int i, n;
+  PartDatabase[0] = ListHeaderMain + "\tSeite";
+  schematic(SCH) {
+    SCH.sheets(SH) {
+        SH.parts(P) {
+          if (strchr(P.name, 'X') == 0) {
+             if (strstr(P.device.name, "BRUECKE") >= 0) {
+                n = 0;
+                sprintf(s, "%s\t", P.name);
+                P.instances(I) {
+                  n++;
+                  }
+                maxklemmen = max(maxklemmen, n);
+                sprintf(s1, "%d\t", n);
+                listall[i] = s + s1;
+                s3 = "";
+                P.instances(I) {
+                  s3 += I.gate.name + " ";
+                  }
+                sh = "";
+                P.instances(I) {
+                  sprintf(sh, "%d ", SH.number); // sheets
+                  }
+                listall[i] += StripWhiteSpace(s3) + "\t" + DelMultiples(sh);
+                PartDatabase[i+1] = listall[i] + "\t" + DelMultiples(sh); // LogCmd +=  PartDatabase[i] + "\n";
+                i++;
+                }
+            }
+        }
+     }
+   }
+}
+
+void PushUndo(void) {
+  int i;
+  while (listundo[i]) {
+    listundo[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listsel[i]) {
+    listundo[i] = listsel[i];
+    i++;
+    }
+}
+
+void PullUndo(void) {
+  int i;
+  while (listsel[i]) {
+    listsel[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listundo[i]) {
+    listsel[i] = listundo[i];
+    i++;
+    }
+}
+
+void ShowLog(void) {
+  dlgDialog("Brückendaten aus der Schaltung") {
+     dlgHBoxLayout dlgSpacing(600);
+     dlgHBoxLayout{
+        dlgTextEdit(LogCmd);
+        }
+     dlgHBoxLayout {
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("&Hilfe") dlgMessageBox( "Die Liste gibt Hinweise auf mögliche Probleme beim Einlesen\n"
+                                               "der Brückenverbindungen."
+                                             );
+        dlgPushButton("+OK") dlgAccept();
+        }
+     };
+}
+
+// liefert alle a, die nicht in b sind; a,b und return-Wert sind blanksep. Strings
+string AllAnotinB(string a, string b) {
+  int i, na;
+  numeric string ha[];
+  a = StripWhiteSpace(a);
+  b = StripWhiteSpace(b);
+  na = strsplit(ha, a, ' ');
+  a = "";
+  for (i = 0; i < na; i++) {
+      if (!IsInBlankStr(ha[i], b)) {
+            a += ha[i] + " ";
+            }
+      }
+  return StripWhiteSpace(a);
+}
+
+string GetUnused(int Sel) { // liefert unbenutzte Klemmen als blanksep. String
+  int i, n;
+  string h[], s, usedB, usedD, t; // von Brücken benutzt; von Drähten benutzt
+  if (Sel < 0 || CurrentPartIndex < 0) return "";
+  PushUndo();
+  s = UnpackListall(CurrentPartIndex, Verwendet);
+  while (listsel[i]) {
+    if (Sel != i) usedB += UnpackListsel(i, Bruecken) + " ";
+    usedD += UnpackListsel(i, Draehte)  + " ";
+    i++;
+    }
+  s = AllAnotinB(s, usedB);
+  if (ExcludeDrahtverbindungen)
+     s += " " + AllAnotinB(s, usedD);
+  return StripWhiteSpace(s);
+}
+
+int CheckOKChangeString(string st) { // lässt nur solche zu, die noch nicht in anderer Br. verwendet
+  int i, np;
+  string s, h[];
+  s = StripWhiteSpace(st);
+  char c;
+  for (i = 0; i < strlen(s); i++) {
+      c = s[i];
+      if (isdigit(c) || c == ' ') {
+         }
+      else return 0;
+      }
+  np = strsplit(h, st, ' ');
+  if (np == 1) return 0;
+  for (i = 0; i < np; i++) {
+      if (!IsInBlankStr(h[i], GetUnused(SelConnected))) {
+            return 0;
+            }
+      }
+  return 1;
+}
+
+void ClearGarbageListsel() { // löscht leere Einträge am Ende von listsel
+  int i;
+  while (listsel[i]) {
+    if (UnpackListsel(i, Draehte) == "" && UnpackListsel(i, Bruecken) == "") listsel[i] = "";
+    i++;
+    }
+}
+
+// Lösche eine Verbindung aus Auswahlliste
+void DelOneEntry(int Sel) {
+  int i, n, imax;
+  string x[];
+  PushUndo();
+  if (Sel < 0) return;
+  SelConnected = -1;
+  while(UnpackListsel(i, Bruecken)) i++; // # Einträge feststellen
+  imax = i;
+  for (i = 0; i < imax; i++) {
+      if (i <= Sel) {
+         x[i] = UnpackListsel(i, Bruecken);
+         }
+      else {
+         x[i-1] = UnpackListsel(i, Bruecken);
+         }
+      }
+  if (imax != 0) PackListsel(imax-1, Bruecken, "");
+
+  if (Sel == 0 && imax == 0) {
+     PackListsel(0, Bruecken, "");
+     }
+  else {
+     imax = imax -1;
+     for (i = 0; i < imax; i++) {
+         PackListsel(i, Bruecken, x[i]);
+         }
+     }
+  if (Sel > 0) SelConnected = Sel-1;
+  else         SelConnected = 0;
+  ClearGarbageListsel(); // entferne leere Zeilen aus listsel
+}
+
+void CreateBridge(void) {
+  int i;
+  while(UnpackListsel(i, Bruecken)) i++; // # Einträge feststellen
+  PackListsel(i, Bruecken, "");
+  ChangeString = "";
+  SelConnected = i;
+}
+
+void EditOneEntry(int Sel) {
+  string h[];
+  if (Sel < 0) return;
+  strsplit(h, listsel[Sel], '\t');
+  ChangeString = SortBlankSeparatedString(h[Bruecken]);
+}
+
+void TransferEditLine (int Sel) {
+  string h[];
+  if (Sel < 0) return;
+  PushUndo();
+  if (StripWhiteSpace(ChangeString) == "") {
+     DelOneEntry(Sel);
+     return;
+     }
+  ChangeString = SortBlankSeparatedString(ChangeString);
+  if (CheckOKChangeString(ChangeString)) {
+     PackListsel(Sel, Bruecken, ChangeString);
+     }
+  else dlgMessageBox("<b>Ungültige Klemmennummern im Editier-Feld!</b><p>"
+                     "Erlaubt sind Klemmennummern, die in der selektierten Brücke verwendet wurden, "
+                     "aber in keiner anderen (nur Leerzeichen und 0-9).<p>"
+                     "Es müssen mindestens zwei Klemmen eingetragen sein.");
+}
+
+void WriteAttributeLog(void) {
+  int i;
+  string s;
+  ErrOn = 0;
+  LogCmd += "Warnungen! - Falsche Verweise\n";
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  while (listall[i]) {
+    SelAll = i;
+    CurrentPartIndex = i;
+    MakeEditListOnePart(i);
+    i++;
+    }
+  SelAll = 0;
+  CurrentPartIndex = 0;
+  MakeEditListOnePart(0);
+  ErrOn = 1;
+}
+
+string MakeList (void) { // aktuelle Brückenliste erstellen
+  int i, j, k;
+  string h[], b[], BrkCmd, s;
+  BrkCmd += "Name\tBrücken\n";
+  while (listall[i]) {
+    strsplit(h, listall[i], '\t'); // hole Bauteilnamen
+    LogOn = 0;
+    BrkCmd += h[Name] + "\t";
+    strsplit (b, GetConnectedRefwise(h[Name]), '\n'); // h: 1 2 3 \t 2 4
+
+    if (CurrentPartIndex == i) {
+       k = 0;
+       while (UnpackListsel(k, Bruecken)) {
+         b[k] = UnpackListsel(k, Bruecken);
+         k++;
+         }
+       b[k] = "";
+       }
+
+    j = 0; s = "";
+    while (b[j]) { // Einzelbrücken
+      // hier ev. aus 1 2 3 4 5 -> 1-5
+      if (!s) s += b[j] + " ";
+      else       s += " : " + b[j];
+      j++;
+      }
+    // s = strjoin(b, ':');
+    BrkCmd += s + "\n";
+    i++;
+    }
+  return BrkCmd;
+}
+
+int CancelOk(void) {
+  int CancelOk;
+  dlgDialog("Programm verlassen") {
+     dlgHBoxLayout dlgSpacing(400);
+     dlgHBoxLayout {
+        dlgTextView ( "Wenn Sie das Programm abbrechen, verlieren Sie alle Änderungen!\n\n"
+                      "Abbrechen?"
+                    );
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+Nein") dlgReject();
+        dlgPushButton("-Ja") {CancelOk = 1; dlgAccept();}
+        }
+     };
+  if (CancelOk) return 1;
+  else return 0;
+}
+
+void SaveList(void) {
+  int i, k, np;
+  string line, klemme[], h[], sht, pname;
+  DoCmd = "";
+//   if (SelConnected < 0) {
+//      dlgMessageBox( "<b>Sie müssen erst eine Zeile im unteren Fenster selektieren!</b><p>");
+//      return;
+//      }
+  strsplit(h, listall[CurrentPartIndex], '\t');
+  pname = h[Name];
+  sht = lookup(PartDatabase, pname, "Seite", '\t');
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  LogCmd += "Befehle zum Eintragen der neuen Verweise\n";
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+  DoCmd += "edit .s" + sht + ";\n";
+  DoCmd += "change display off;\n";
+  line = StripWhiteSpace(UnpackListall(CurrentPartIndex, Verwendet));
+  np = strsplit(klemme, line, ' ');
+  for (k = 0; k < np; k++) { // alle Attr. der verwendeten Klemmen löschen
+      DoCmd += "change display off;\n";
+      DoCmd += "attribute " + pname + " " + klemme[k] + "1 " + "'';\n";
+      DoCmd += "change display off;\n";
+      DoCmd += "attribute " + pname + " " + klemme[k] + "2 " + "'';\n";
+      }
+  i = 0; k = 0;
+  while (StripWhiteSpace(UnpackListsel(i, Bruecken))) { // alle Brückenzeilen in Att. eintragen
+   line = StripWhiteSpace(UnpackListsel(i, Bruecken));
+   np = strsplit(klemme, line, ' ');
+   for (k = 1; k < np; k++) { // alle Klemmen pro Brücke
+       DoCmd += "change display off;\n";
+       DoCmd += "attribute " + pname + " " + klemme[k-1] + "2 " + "'" + klemme[k] + "';\n";
+       }
+   for (k = np - 2; k >= 0; k--) { // alle Klemmen pro Brücke
+       DoCmd += "change display off;\n";
+       DoCmd += "attribute " + pname + " " + klemme[k+1] + "1 " + "'" + klemme[k] + "';\n";
+       }
+   i++;
+   }
+  LogCmd += DoCmd;
+  LogCmd += "---------------------------------------------------------------------------------------------\n";
+
+  output(errorfile, "wtD") printf("%s", LogCmd);
+  output(scrfile,   "wtD") printf("%s", DoCmd);
+  ListCmd = MakeList();
+  output(listfile,  "wt")  printf("%s", ListCmd);
+
+  exit (DoCmd);
+//   schematic(SCH) brkfile = filesetext(SCH.name, ".brk");
+//   string FileName = dlgFileSave("Speichere Brückenliste", brkfile);
+//   if (FileName) {
+//      string a[];
+//      output(FileName, "wtF") {
+//        printf ("%s\n", ListHeaderMain);
+//        while (listall[i]) {
+//          printf("%s\n", listall[i]); // "%s" um Probleme zu vermeiden, wenn listall '%' enthält
+//          i++;
+//          }
+//        }
+//      }
+}
+
+void ShowHelp(void) {
+  dlgDialog("Hilfe") {
+     dlgHBoxLayout dlgSpacing(600);
+     dlgHBoxLayout{
+        dlgVBoxLayout dlgSpacing(600);
+        dlgTextView(HelpText);
+        }
+     dlgHBoxLayout {
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+OK") dlgAccept();
+        }
+     };
+}
+
+//*****************************************************
+void ShowUserInterface(void) {
+dlgDialog("Brückenklemmen verwalten - " + Version) {
+   dlgHBoxLayout dlgSpacing(300);
+  dlgGroup("") {
+     dlgLabel("Vorhandene Klemmenblöcke");
+     dlgListView(ListHeaderMain, listall, SelAll, SortAll) MakeEditListOnePart(SelAll);
+     dlgSpacing(10);
+     }
+  dlgGroup("") {
+     dlgHBoxLayout {
+        dlgLabel(CurrentPart, 1) ;
+        dlgLabel(": Brücken dieses Klemmenblocks editieren");
+        dlgStretch(1);
+        }
+     dlgListView(ListHeader, listsel, SelConnected, Sort) EditOneEntry(SelConnected);
+     dlgHBoxLayout {
+        dlgLabel("Verbinden");
+        dlgStringEdit(ChangeString);
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("Undo")           PullUndo();
+        dlgStretch(1);
+        dlgPushButton("Unbenutzte")     ChangeString = GetUnused(SelConnected);
+        dlgPushButton("Löschen")        DelOneEntry(SelConnected);
+        dlgPushButton("Neu")            CreateBridge();
+        dlgPushButton("+Anwenden")      TransferEditLine(SelConnected);
+        }
+    }
+  dlgSpacing(10);
+  dlgHBoxLayout {
+     }
+  dlgHBoxLayout {
+     dlgPushButton("&Hilfe")     ShowHelp();
+     dlgStretch(1);
+     dlgPushButton("Log-Datei")  ShowLog();
+     dlgPushButton("-Abbrechen") dlgReject(); //  if (CancelOk())      dlgReject();
+     dlgPushButton("Speichern")  SaveList();
+     }
+   };
+}
+//***************** Main ******************************
+SetFileNames();
+NrHeader = strsplit(head, ListHeader, '\t');
+CollectX();
+GetConnectedAllParts();
+WriteAttributeLog();
+output(errorfile, "wtD") printf("%s", LogCmd);
+ShowUserInterface();
+

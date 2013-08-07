@@ -1,0 +1,588 @@
+#usage "<qt><nobr><b>Make SCH/BRD consistent by values.</b>"
+       "<p>"
+       "Start this ULP in the editor which contains the source values.<br>"
+       "<author>Author: support@cadsoft.de</author></nobr></qt>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+string Version = "1.1";  // 2006.10.17
+
+numeric string sch_name[], sch_value[];
+numeric string sch_package[];
+int     sch_sheet[];
+int     sch_Index[];
+int     sch_cnt = 0;
+numeric string s_name[];
+numeric string DeviceList[];
+
+numeric string brd_name[], brd_value[];
+numeric string brd_package[];
+int     brd_Index[];
+int     brd_cnt = 0;
+string  ElementList[];
+
+numeric string sch_name_no_pac[], sch_value_no_pac[], sch_package_no_pac[];
+numeric string  DeviceList_no_pac[];
+int     sch_sheet_no_pac[];
+int     sch_cnt_no_pac = 0;
+
+
+numeric string brd_name_only_pac[], brd_value_only_pac[], brd_package_only_pac[];
+numeric string ElementList_only_pac[];
+int     brd_Index_only_pac[];
+int     brd_cnt_only_pac;
+
+
+string  lines[];
+int     lines_cnt;
+
+string  diff_values[];
+string  command;
+int     runcount = 0;
+
+string  notfound[];
+int     cnt_nf= 0;
+
+string  changeValue = "";
+
+string  readfile, readfile_only_pac, readfile_no_pac;
+string  ext = ".~cv";  // extension for temp file
+
+string  emptySchList[], emptyBrdList[];
+int     cnt_SCHempty = 0, cnt_BRDempty = 0;
+
+int     n;
+
+
+// ### Functions ###
+if (board) {
+  board(B) {
+    readfile = filesetext(B.name, ext);
+    readfile_only_pac = filesetext(B.name, "_only_pac"+ext);
+    readfile_no_pac = filesetext(B.name, "_no_pac"+ext);
+  }
+}
+if (schematic) {
+  schematic(S) {
+    readfile = filesetext(S.name, ext);
+    readfile_only_pac = filesetext(S.name, "_only_pac"+ext);
+    readfile_no_pac = filesetext(S.name, "_no_pac"+ext);
+  }
+}
+
+
+int genscript(void) {
+  int xcnt = 0;
+  numeric string ch_name[], ch_value[];
+  int ch_sheet[];
+  int bIndex[], sIndex[];
+  sort(brd_cnt, bIndex, brd_name);  // sort by name
+  sort(sch_cnt, sIndex, sch_name);  // sort by name
+  for (int x = 0; x < sch_cnt; x++) {
+    if ( sch_value[sIndex[x]] != brd_value[bIndex[x]]) {  // change only values are different
+      if (board) {
+        ch_name[xcnt]  = brd_name[bIndex[x]];
+        ch_value[xcnt] = sch_value[sIndex[x]];
+        ch_sheet[xcnt] = 0;   // no sheet in bard
+      }
+      if (schematic) {
+        ch_name[xcnt]  = sch_name[sIndex[x]];
+        ch_value[xcnt] = brd_value[bIndex[x]];
+        ch_sheet[xcnt] = sch_sheet[sIndex[x]];
+      }
+      xcnt++;
+    }
+  }
+  string s;
+  int actualsheet = 0;
+  if (xcnt) {
+    for (int n = 0; n < xcnt; n++) {
+      if (actualsheet != ch_sheet[n]) {
+        sprintf(s, "EDIT .s%d;\n", ch_sheet[n]);
+        command += s;
+        actualsheet = ch_sheet[n];
+      }
+      sprintf( s, "VALUE %s '%s';\n", ch_name[n], ch_value[n] );
+      command += s;
+    }
+  }
+  return xcnt;
+}
+
+
+void checkdiff(void) {
+  int n1, n2, found;
+  for (n1 = 0; n1 < brd_cnt; n1++) {
+    found = 0;
+    for (n2 = 0; n2 < sch_cnt; n2++) {
+      if(brd_name[n1] == sch_name[n2]) {
+        found = 1;
+        break;
+      }
+    }
+    if (!found) {
+      sprintf(notfound[cnt_nf], "%s\t%s", ElementList[n1],".brd");
+      cnt_nf++;
+    }
+  }
+  for (n1 = 0; n1 < sch_cnt; n1++) {
+    found = 0;
+    for (n2 = 0; n2 < brd_cnt; n2++) {
+      if(sch_name[n1] == brd_name[n2]) {
+        found = 1;
+        break;
+      }
+    }
+    if (!found) {
+      sprintf(notfound[cnt_nf], "%s\t%s", DeviceList[n1], ".sch");
+      cnt_nf++;
+    }
+  }
+  return;
+}
+
+
+string getBrdValue(string name) {
+  for (int n = 0; n < brd_cnt; n++) {
+    if (name == brd_name[n]) if (brd_value[n]) return brd_value[n];
+  }
+  return "";
+}
+
+
+string getSchValue(string name) {
+  for (int n = 0; n < sch_cnt; n++) {
+    if (name == sch_name[n]) if (sch_value[n]) return sch_value[n];
+  }
+  return "";
+}
+
+
+void checkSCHempty(void) {
+  for (int n = 0; n < sch_cnt; n++) {
+    if (!sch_value[n]) {
+      emptySchList[cnt_SCHempty] = sch_name[n] + "\t" + getBrdValue(sch_name[n]);
+      cnt_SCHempty++;
+    }
+  }
+  return;
+}
+
+
+void checkBRDempty(void) {
+  for (int n = 0; n < brd_cnt; n++) {
+    if (!brd_value[n]) {
+      emptyBrdList[cnt_BRDempty] = brd_name[n] + "\t" + getSchValue(brd_name[n]);
+      cnt_BRDempty++;
+    }
+  }
+  return;
+}
+
+
+void setVal(string namev) {
+  string s[], cmd;
+  int cnt = strsplit(s, namev, '\t');
+  if (board) {
+    for (int n = 0; n < sch_cnt; n++) {
+      if (s[0] == sch_name[n]) {
+        sprintf(cmd, "EDIT .S%d;\n", sch_sheet[n]);
+        break;
+      }
+    }
+  }
+  if (schematic) sprintf(cmd, "EDIT .brd;");
+  cmd += "VALUE " + s[0];
+  int Result = dlgDialog("Value for " + s[0]) {
+    dlgLabel("Change VALUE for <b>"+s[0]+"</b>");
+    dlgStringEdit(s[1]);
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgPushButton("-Cancel") dlgReject();
+    }
+  };
+  if (!Result) return;
+  cmd += " '"+s[1]+"';\nRUN '"+argv[0]+"';";
+  exit(cmd);
+}
+
+
+void cmd_exit(string t) {
+  string s[];
+  string f;
+  string cmd;
+  int cnts = strsplit(s, t, '\t');
+  if (board && s[4] == ".brd" || schematic && s[4] == ".sch") {
+    sprintf(cmd, "RUN find '%s';\n", s[0]);
+  }
+  else {
+    f = filesetext(readfile, s[4]);
+    sprintf(cmd, "EDIT '%s';\nRUN find '%s';\n", f, s[0]);
+  }
+  exit(cmd);
+  return;
+}
+
+
+void show_no_contact(void) {
+  int sel_onlypac, sel_nopac;
+  dlgDialog(argv[0]) {
+    dlgHBoxLayout {
+      dlgVBoxLayout {
+        dlgLabel("Devices without Contacts");
+        dlgListView("Name\tValue\tPackage\tSheet", DeviceList_no_pac, sel_onlypac);
+      }
+      dlgVBoxLayout {
+        dlgLabel("Elements without Contacts");
+        dlgListView("Name\tValue\tPackage", ElementList_only_pac, sel_nopac);
+      }
+      dlgStretch(1);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgStretch(1);
+    }
+  };
+  return;
+}
+
+
+void menue(void) {
+  int devsel = -1, pacsel = -1;
+  string Error = "";
+  string InfoSch, InfoBrd;
+  sprintf(InfoSch, "&Schematic : %d Devices", sch_cnt);
+  sprintf(InfoBrd, "&Board : %d Elements", brd_cnt);
+  checkdiff();
+  if (board) checkSCHempty();
+  if (schematic) checkBRDempty();
+  int dif = genscript();                 // generate SCRIPT
+
+  if (cnt_nf || cnt_SCHempty || cnt_BRDempty) {
+    if (cnt_nf || sch_cnt != brd_cnt) {
+      sprintf( Error, "<nobr><font color=\"red\"><b>STOP</b><p> Different counts of parts<p><b>%5d</b> Devices/SCH<br><b>%5d</b> Packages/BRD<p><b>STOP</b><br>", sch_cnt, brd_cnt);
+      if(sch_cnt > brd_cnt) Error += "</font><nobr><font color=\"blue\">Place Package in BRD or <br>delete Device in SCH</font></nbr>";
+      else Error += "</font><font color=\"blue\">Place Device in SCH or delete Package in BRD!</font></nobr>";
+    }
+    int Result = dlgDialog("Make Value Consistent") {
+      int sel_nf, sell = -1, ssort = -2 ,dsl = 1 , psl = 1;
+      dlgHBoxLayout {
+        dlgGridLayout {
+          if (Error) {
+                        dlgCell( 0, 0) {
+                                         dlgLabel(Error);
+                        }
+            if (cnt_nf) {
+                        dlgCell( 0, 1) {
+                                         dlgVBoxLayout {
+                                           dlgLabel("To many Devices respectively Elements in <b>Editor</b>, see list.");
+                                           dlgLabel("&For show selected Device/Element, double-click in list");
+                                           dlgListView("Name\tValue\tPackage\tSheet\tEditor", notfound, sel_nf) cmd_exit(notfound[sel_nf]);
+                                         }
+                                       }
+                        }
+          }
+          else {
+            if (board) {
+              if (cnt_SCHempty) {
+                                dlgCell( 1, 0) {
+                                                 dlgVBoxLayout {
+                                                   dlgLabel("<nobr><font color=\"red\">Do not use <b>empty</b> values when use this ULP!</font></nobr>");
+                                                   dlgLabel("<nobr> First set VALUE in <b>SCHEMATIC</b> </nobr>");
+                                                   dlgLabel("<nobr><font color=\"darkgreen\"> (double-click in list)</font></nobr>");
+                                                   dlgStretch(1);
+                                                 }
+                                }
+                                dlgCell( 1, 1) {
+                                                 dlgVBoxLayout {
+                                                   string evSch; sprintf(evSch, "%d empty &Values in Schematic!", cnt_SCHempty);
+                                                   dlgLabel(evSch);
+                                                   dlgListView("NAME\tValue in BRD", emptySchList, sell, ssort) setVal(emptySchList[sell]);
+                                                 }
+                                }
+              }
+            }
+            if (schematic) {
+              if (cnt_BRDempty) {
+                                dlgCell( 1, 0) {
+                                                 dlgVBoxLayout {
+                                                   dlgLabel("<nobr><font color=\"red\">Do not use <b>empty</b> values when use this ULP!</font></nobr>");
+                                                   dlgLabel("<nobr> First set VALUE in <b>BOARD</b> </nobr>");
+                                                   dlgLabel("<nobr><font color=\"darkgreen\"> (double-click in list)</font></nobr>");
+                                                   dlgStretch(1);
+                                                 }
+                                }
+                                dlgCell( 1, 1) {
+                                                 dlgVBoxLayout {
+                                                   string evBrd; sprintf(evBrd, "%d empty &Values in Board!", cnt_BRDempty);
+                                                   dlgLabel(evBrd);
+                                                   dlgListView("Name\tValue in SCH", emptyBrdList, sell, ssort) setVal(emptyBrdList[sell]);
+                                                 }
+                                }
+              }
+            }
+          }
+
+          dlgCell( 1, 2) {
+                           dlgHBoxLayout {
+                             dlgSpacing(12);
+                             dlgPushButton("Show Device and Package without Contacts") show_no_contact();
+                           }
+                         }
+        }
+        dlgStretch(1);
+      }
+      if (!command) {
+        dlgSpacing(8);
+        dlgLabel("<b>VALUES are consistent</b>");
+      }
+
+      dlgLabel("<HR>");
+      dlgHBoxLayout {
+        dlgVBoxLayout {
+          dlgLabel(InfoSch);
+          dlgListView("Name\tValue\tPackage", DeviceList, devsel, dsl);
+        }
+        dlgVBoxLayout {
+          dlgLabel(InfoBrd);
+          dlgListView("Name\tValue\tPackage", ElementList, pacsel, psl);
+        }
+      }
+      dlgHBoxLayout {
+        if (!Error && !cnt_SCHempty && !cnt_BRDempty) {
+          dlgPushButton("+OK") dlgAccept();
+          dlgPushButton("-Cancel") dlgReject();
+        }
+        else {
+          dlgPushButton("OK") dlgReject();
+        }
+        dlgStretch(1);
+        dlgLabel(usage);
+        dlgStretch(1);
+        dlgLabel("Version " + Version);
+      }
+    };
+    if (!Result) exit(0);
+    if (!command) exit(0);
+  }
+
+  // ****** show script ******
+//  int ssel, bsel, dsel;
+  int Result = dlgDialog("Make VALUE consistent") {
+    dlgHBoxLayout {
+      if (command) {
+        dlgVBoxLayout {
+          dlgLabel("Change values in " + argv[1]);
+          dlgLabel("Command");
+          dlgTextEdit(command);
+        }
+      }
+      else {
+        dlgVBoxLayout {
+          dlgLabel("Values are consistent");
+        }
+      }
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgPushButton("-Cancel") dlgReject();
+      dlgStretch(1);
+      dlgLabel(" Version " + Version);
+    }
+  };
+  if (Result) {
+    if (command) {
+      string scriptfile = filesetext(readfile, "~.scr");
+      output(scriptfile, "wtD") printf("%s",command);
+      exit("script '" + scriptfile + "';ERC\n");
+    }
+  }
+  exit (0);
+}
+
+
+int noexist(string name, int cnt) {
+  int is = 1;
+  for (int n = 0; n < cnt; n++) {
+    if (s_name[n] == name) {
+      is = 0;
+      break;
+    }
+  }
+  return is;
+}
+
+
+// ### Main ###
+runcount = strtol(argv[2]);
+if (runcount == 1) {
+  string cmd;
+  lines_cnt = fileread( lines, readfile);
+  if (board) {
+    int rnp = fileread(DeviceList_no_pac, readfile_no_pac);
+  }
+  if (schematic) {
+    int rop = fileread(ElementList_only_pac, readfile_only_pac);
+  }
+}
+
+
+// *** Board ***
+if (board) {
+  string b_name[], b_value[], b_package[];
+  string b_name_only_pac[], b_value_only_pac[], b_package_only_pac[];
+
+  board(B) {
+    B.elements(E) {
+      int PACcontact = 0;
+      E.package.contacts(C) {
+        b_name[brd_cnt] = E.name;
+        b_value[brd_cnt] = E.value;
+        b_package[brd_cnt] = E.package.name;
+        brd_cnt++;
+        PACcontact++;
+        break;
+      }
+      if (!PACcontact) {
+        b_name_only_pac[brd_cnt_only_pac] = E.name;
+        b_value_only_pac[brd_cnt_only_pac] = E.value;
+        b_package_only_pac[brd_cnt_only_pac] = E.package.name;
+        brd_cnt_only_pac++;
+      }
+    }
+
+    sort (brd_cnt, brd_Index, b_value, b_name);
+    for (n = 0; n < brd_cnt; n++) {
+      brd_name[n]  = b_name[brd_Index[n]] ;
+      brd_value[n] = b_value[brd_Index[n]] ;
+      brd_package[n] = b_package[brd_Index[n]];
+      sprintf(ElementList[n], "%s\t%s\t%s\t0", brd_name[n], brd_value[n], brd_package[n] );
+    }
+    sort (brd_cnt_only_pac, brd_Index_only_pac, b_value_only_pac, b_name_only_pac);
+    for (n = 0; n < brd_cnt_only_pac; n++) {
+      brd_name_only_pac[n]  = b_name_only_pac[brd_Index_only_pac[n]] ;
+      brd_value_only_pac[n] = b_value_only_pac[brd_Index_only_pac[n]] ;
+      brd_package_only_pac[n] = b_package_only_pac[brd_Index_only_pac[n]];
+      sprintf(ElementList_only_pac[n], "%s\t%s\t%s", brd_name_only_pac[n], brd_value_only_pac[n], brd_package_only_pac[n] );
+    }
+
+    if (runcount < 1) {
+      output(readfile, "wtD") {
+        for(int x = 0; x < brd_cnt; x++) {
+          printf("%s\t%s\t%s\t0\n", brd_name[x], brd_value[x], brd_package[x] );
+        }
+      }
+      output(readfile_only_pac, "wtD") {
+        for(int x = 0; x < brd_cnt_only_pac; x++) {
+          printf("%s\t%s\t%s\n", brd_name_only_pac[x], brd_value_only_pac[x], brd_package_only_pac[x] );
+        }
+      }
+      runcount++;
+      string cmd;
+      sprintf( cmd, "edit '%s';\n run '%s' SCH %d;\n", filesetext(B.name, ".sch"), argv[0], runcount );
+      exit(cmd);
+    }
+    sch_cnt = lines_cnt;
+    string s[];
+    for (n = 0; n < sch_cnt; n++) {
+      strsplit(s, lines[n], '\t');
+      sch_name[n]    = s[0];
+      sch_value[n]   = s[1];
+      sch_package[n] = s[2];
+      sch_sheet[n]   = strtol(s[3]);
+      sprintf(DeviceList[n], "%s\t%s\t%s\t%d", sch_name[n] , sch_value[n], sch_package[n], sch_sheet[n] );
+    }
+  }
+  menue();
+}
+
+// *** Schematic ***
+if (schematic) {
+  string s_value[], s_package[];
+  int    s_sheet[];
+  string s_name_no_pac[];
+  string s_value_no_pac[];
+  string s_package_no_pac[];
+  int    s_sheet_no_pac[];
+
+  schematic(S) {
+    S.sheets(SH) {
+      SH.parts(PA) {
+        if (PA.device.package) {
+          int PACcontact = 0;
+          PA.device.package.contacts(C) {
+            PACcontact++;
+            break;
+          }
+          if (PACcontact) {
+            if (noexist(PA.name, sch_cnt)) {
+              s_name[sch_cnt] = PA.name;
+              s_value[sch_cnt] = PA.value;
+              s_package[sch_cnt] = PA.device.package.name;
+              PA.instances(IN) {             // Gate
+                if (IN.sheet) {
+                  s_sheet[sch_cnt] = IN.sheet;
+                  sch_cnt++;
+                  break;
+                }
+              }
+            }
+          }
+          else {
+            s_name_no_pac[sch_cnt_no_pac] = PA.name;
+            s_value_no_pac[sch_cnt_no_pac] = PA.value;
+            s_package_no_pac[sch_cnt_no_pac] = PA.device.package.name;
+            PA.instances(IN) {             // Gate
+              if (IN.sheet) {
+                s_sheet_no_pac[sch_cnt_no_pac] = IN.sheet;
+                sch_cnt_no_pac++;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    sort (sch_cnt, sch_Index, s_name);
+    for (n = 0; n < sch_cnt; n++) {
+      sch_name[n]  = s_name[sch_Index[n]] ;
+      sch_value[n] = s_value[sch_Index[n]] ;
+      sch_package[n] = s_package[sch_Index[n]];
+      sch_sheet[n] = s_sheet[sch_Index[n]];
+      sprintf(DeviceList[n], "%s\t%s\t%s\t%d", sch_name[n] , sch_value[n], sch_package[n], sch_sheet[n]);
+    }
+    for (n = 0; n < sch_cnt_no_pac; n++) {
+      sch_name_no_pac[n]  = s_name_no_pac[n] ;
+      sch_value_no_pac[n] = s_value_no_pac[n] ;
+      sch_package_no_pac[n] = s_package_no_pac[n];
+      sch_sheet_no_pac[n]   = s_sheet_no_pac[n];
+      sprintf(DeviceList_no_pac[n], "%s\t%s\t%s\t%d", sch_name_no_pac[n] , sch_value_no_pac[n], sch_package_no_pac[n], sch_sheet_no_pac[n]);
+    }
+
+    if (runcount < 1) {
+      output(readfile, "wtD") {
+        for(int x = 0; x < sch_cnt; x++) {
+          printf("%s\t%s\t%s\t%d\n", sch_name[x], sch_value[x], sch_package[x], sch_sheet[x] );
+        }
+      }
+      output(readfile_no_pac, "wtD") {
+        for(int x = 0; x < sch_cnt_no_pac; x++) {
+          printf("%s\t%s\t%s\t%d\n", sch_name_no_pac[x], sch_value_no_pac[x], sch_package_no_pac[x], sch_sheet_no_pac[x] );
+        }
+      }
+      runcount++;
+      string cmd;
+      sprintf( cmd, "edit '%s';\n run '%s' BRD %d;\n", filesetext(S.name, ".brd"), argv[0], runcount );
+      exit(cmd);
+    }
+    brd_cnt = lines_cnt;
+    string s[];
+    for ( n = 0; n < brd_cnt; n++) {
+      strsplit(s, lines[n], '\t');
+      brd_name[n] = s[0];
+      brd_value[n] = s[1];
+      brd_package[n] = s[2];
+      sprintf(ElementList[n], "%s\t%s\t%s\t0", brd_name[n], brd_value[n], brd_package[n] );
+    }
+  }
+  menue();
+}

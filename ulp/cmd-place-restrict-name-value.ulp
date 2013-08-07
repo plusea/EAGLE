@@ -1,0 +1,162 @@
+#usage "<b>Copy name and value into restrict layer</b>\n"
+       "<p>"
+       "Generates a command sequence which copies the name texts-wires and value texts-wires "
+       "of all elements of your layout into restrict layers (41 and 42)."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+int    tNames = 25, bNames = 26;
+real   distance = 0.2;     // distance Wire <> Text in Millimeter.
+string cmd;
+string h;
+string scriptfile;
+
+
+string help = "If the Autorouter shall avoid the NAME and VALUE text area\n" +
+              "we have to draw the texts as wires in the restrict layers.\n" +
+              "To let the Autorouter keep a minimum distance to the texts (wires)\n" +
+              "to avoid short circuits, we have to draw the text wires with a\n" +
+              "higher width which includes the respective minimum clearance.\n" +
+              "\n"+
+              "German help text inside the ulp file.\n";
+
+
+/*string German help = "Kopiert die Texte 'Name' und 'Value' in die Restrict-Layer.\n" +
+ *              "Soll der Autorouter unter den NAME- und VALUE-Texten\n" +
+ *              "nicht routen, so muss der Text als Wire in die Restrict-Layer\n" +
+ *              "kopiert werden.\n" +
+ *              "Damit der Autorouter einen Abstand zu den Elementen (Textlinien)\n" +
+ *              "einhaelt, um keine Kurzschluesse zu erzeugen, muss die Linienbreite\n" +
+ */             "um den entsprechenden Mindestabstand erweitert werden.\n";
+
+void header(void) {
+  sprintf(cmd, "# Exported from %s by %s\n", scriptfile, EAGLE_SIGNATURE );
+  sprintf(h, "# Distance = %.3f mm\n", distance); cmd += h;
+  cmd += "SET UNDO_LOG OFF;\n";         // advisable for speed reasons
+  cmd += "set wire_bend 2;\n";
+  cmd += "GRID mm;\n";
+}
+
+//  Distance menue
+int menue(void) {
+  int d = dlgDialog("Place Text as Wire") {
+     dlgLabel(usage);
+     dlgLabel(help);
+     dlgHBoxLayout {
+        dlgLabel("&Distance [mm]");
+        dlgRealEdit(distance);
+        }
+     dlgHBoxLayout {
+        dlgPushButton("+&OK") dlgAccept();
+        dlgPushButton("-&Cancel") dlgReject();
+        dlgStretch(1);
+        }
+     };
+   return d;
+  }
+
+if (board) board(B) {
+    if (!menue()) exit (0);
+    scriptfile = filesetext(B.name, ".scr");
+    header();
+    distance *= 2;
+    B.elements(E) {
+
+    E.texts(T) {        // *** smased ***
+       if (T.layer == 25) {
+           sprintf(h, "Change Layer %d;\n", 41);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 26) {
+           sprintf(h, "Change Layer %d;\n", 42);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 27) {
+           sprintf(h, "Change Layer %d;\n", 41);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 28) {
+           sprintf(h, "Change Layer %d;\n", 42);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+     }
+
+     E.package.texts(T) {        // *** non smased
+       if (T.layer == 25) {
+           sprintf(h, "Change Layer %d;\n", 41);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 26) {
+           sprintf(h, "Change Layer %d;\n", 42);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 27) {
+           sprintf(h, "Change Layer %d;\n", 41);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+       if (T.layer == 28) {
+           sprintf(h, "Change Layer %d;\n", 42);cmd += h;
+           T.wires(W) {
+              sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+                         u2mm(W.width) + distance, u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+              cmd += h;
+              }
+       }
+     }
+    }
+}
+cmd += "SET UNDO_LOG ON;\n";
+cmd += "GRID LAST;\n";
+
+//  EditBox
+int Result = dlgDialog("Copy Text in Restrict.Layer") {
+  dlgHBoxLayout {
+     dlgTextEdit(cmd);
+     dlgVBoxLayout {
+        dlgSpacing(300);
+        }
+     }
+  dlgHBoxLayout {
+     dlgSpacing(500);
+     }
+  dlgHBoxLayout {
+     dlgPushButton("+&Execute") dlgAccept();
+     dlgPushButton("-&Cancel") dlgReject();
+     dlgStretch(1);
+     }
+  };
+if (Result == 0) exit(0);
+
+output(scriptfile, "wt") printf("%s", cmd);
+
+exit("script '" + scriptfile + "';\nREMOVE '" + scriptfile + "';\n");

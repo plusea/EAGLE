@@ -1,0 +1,21 @@
+#usage "<b>Run a SCRIPT through all symbols in a library</b><p>\n"
+       "RUN run-loop-all-symbols-script [SCRIPT]<br>"
+       "<author>Author: librarian@cadsoft.de</author><p><p>"
+
+string Version = "1.0";       // 2008-08-28
+string ScriptFile = argv[1];
+string cmd, s;
+
+if  (library) {
+  library(L) {
+    if (!ScriptFile) ScriptFile = dlgFileOpen("Select a SCRIPT to run in all SYMBOLS", path_scr[0], "*.scr");
+    if (!ScriptFile) exit(0);
+    L.symbols(S) {
+       sprintf(s, "EDIT %s.SYM;\nSCRIPT '%s';\n", S.name, ScriptFile);
+       cmd += s;
+    }
+  }
+  exit (cmd);
+}
+
+else dlgMessageBox("Start this ULP from a Library", "OK");

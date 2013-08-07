@@ -1,0 +1,187 @@
+#usage "<b>Create a list of all signals with various data</b>\n"
+       "<p>"
+       "Creates a list of all signals of a board, together "
+       "with their maximum frequency, length, area, resistance, "
+       "minimum and maximum width and maximum current."
+       "<p>"
+       "This is a very simplified calculation for a first evaluation "
+       "of the layout."
+       "<p>"
+       "Parallel tracks and polygons are not taken into consideration."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+/*  German description:
+ "Dieses ULP berechnet alle Signallaengen eines Layouts<p>"
+ "(nur Layer 1 bis 16) und die zugehoerige Frequenz (f=c/l) "
+ "und erzeugt eine Textdatei length-ri.txt, die alle Signale nach "
+ "Frequenz bzw Laenge sortiert enthaelt.<p>"
+ "Bei der Frequenzberechnung handelt es sich um eine ganz einfache "
+ "Umrechnung, die eine erste Abschaetzung bzgl. Stoerstrahlung erlaubt.<p>"
+ "Zusaetzlich wird die minimale und maximale Leiterbahnbreite ermittelt "
+ "und die daraus resultierende Strombelastung.<p>"
+ "Bei der Widerstands- und Strombelastbarkeits-Berechnung wird die "
+ "minimale Leiterbahnbreite herangezogen.<p>"
+ "Es wird auch keine eine Parallelführung bzw. Fläche (Polygon) "
+ "berücksichtigt.<p>"
+ "A. Zaffran 05.04.2000 alf@cadsoft.de<p>"
+*/
+
+real f, WLtotal;
+int index[];
+
+    // ** aus "Mechanik der Elektronik"
+    // mm  <1  1  2  3  4  5  6  7  8  9 10 11 12 13 mm Leiterbreite bei 35 um Cu
+
+real k[] = { 9, 8.8, 6, 4, 3.2, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9 };
+
+    //               _______________________
+    //  Imax ~ 5.25 V [d x b x (d + b)] x k      ||  (tL ~60�)
+    //
+    //  d = um Cu-Kaschierung
+    //  b = Breite mm
+    //  k = Korrekturwert aus Tabelle      02.02.2000 alf
+    //  ** aus "Mechanik der Elektronik"
+
+real Cu = 0.035;  // 35 um Cu Kaschierung
+
+real Length[], Freq[], Widthmin[], Widthmax[];
+string Signal[];
+
+real c = 299800;   // Lichtgechwindigkeit Vakuum in [km/s]
+
+int n = 0;
+int t;
+string data[];
+string h;
+string header;
+int note = 0;
+
+void dialog(void)
+{
+  int select = 0;
+  int Result = dlgDialog("Wire length of Layout") {
+    dlgLabel(header);
+    string lab;
+    sprintf(lab, " Cu thickness = %.3f mm", Cu);
+    dlgLabel(lab);
+    dlgListView("", data, select);
+    dlgStretch(0);
+    dlgHBoxLayout {
+      dlgStretch(1);
+      dlgPushButton("+&Save") {
+        board(B) {
+          string FileName = dlgFileSave("Save list", filesetext(B.name, ".txt"));
+          if (FileName) {
+             output (FileName, "wt") {
+               printf("%s", header);
+               for (int x = 0; x < t; x++)
+                   printf("%s\n", data[x]);
+               if (note) {
+                  sprintf( h, "\n ***  note wire width.\n");
+                  data[t]  += h;
+                  t++;
+                  }
+               }
+             }
+          }
+        }
+      dlgPushButton("-Close") dlgReject();
+      }
+    };
+  if (!Result)
+     exit(0);
+}
+
+real WireLength(real x1, real x2, real y1, real y2)
+{
+  return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
+
+real ArcLength(real ang1, real ang2, real radius)
+{
+  return radius  * 2 * PI / 360 * (ang2 - ang1);
+}
+
+real Frequency(real c, real l)
+{
+  return c / l;
+}
+
+void WireWidth(string sig, real w)
+{
+  // ermitteln der min-max Leiterbahnbreite
+  if (w < Widthmin[n])  Widthmin[n] = w;
+  if (w > Widthmax[n])  Widthmax[n] = w;
+}
+
+real imax(real breite)
+{
+  return (breite == 0) ? 0 : 5.25 * sqrt((Cu * breite * (Cu + breite)) * k[int(trunc(breite))]);
+}
+
+if (board) board(B) {
+   sprintf(h, "%s\n", EAGLE_SIGNATURE);
+   header += h;
+   sprintf(h, "List of signals with length and its max. frequency / current\n");
+   header += h;
+   sprintf(h, "exported from %s\nat %s\n", B.name, t2string(time()));
+   header += h;
+
+   B.signals(S) {
+     WLtotal = 0;
+     Widthmin[n] = 32000;
+     Widthmax[n] = 0;
+     S.wires(W) {
+       if (W.layer < 17) {           // nur Kupfer-Layer
+          if (W.arc) {
+             WLtotal += ArcLength(W.arc.angle1, W.arc.angle2, u2mm(W.arc.radius));
+             }
+          else {
+             WLtotal += WireLength(u2mm(W.x2), u2mm(W.x1), u2mm(W.y2), u2mm(W.y1));
+             }
+          WireWidth(S.name, u2mm(W.width));
+          }
+       }
+     if (WLtotal != 0) {
+        Signal[n] = S.name;
+        Length[n] = WLtotal;
+        Freq[n] = Frequency(c, WLtotal);
+        ++n;
+        }
+     }
+   sort(n, index, Freq);
+
+   sprintf(h, "Signal\tf max. [MHz]\tl [mm]\tA [mm2]\tR [mOhm]\tw min [mm]\tw max [mm]\tImax [A]");
+   data[0] = h;
+   t = 1;
+
+   for (int i = 0; i < n; ++i) {
+       real mm2 = Widthmin[index[i]] * Cu;
+       real mOhm = 0;
+       string R;
+       if (Widthmin[index[i]]) {
+          mOhm  = (174 * Length[index[i]] / 10) / ( Cu * 1000 * Widthmin[index[i]]);
+          sprintf(R, "%7.2f", mOhm);
+          }
+
+       sprintf(h, "%s\t%10.2f\t%7.3f\t%4.3f\t%s\t%6.3f\t%6.3f\t%6.2f", Signal[index[i]], Freq[index[i]], Length[index[i]], mm2, R, Widthmin[index[i]], Widthmax[index[i]], imax(Widthmin[index[i]]));
+       data[t] = h;
+
+       if (!Widthmin[index[i]]) {
+          note = 1;
+          sprintf( h, " ***");
+          data[t] += h;
+          }
+       t++;
+       }
+
+   dialog();
+   }
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Board     \n");
+   exit (0);
+}

@@ -1,0 +1,117 @@
+#usage "<b>Change Net-Classes in a board</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string grid[] = { "MIC", "MM", "MIL", "INCH" };
+int Gridval = 1;              // 0=mic 1=mm 2=mil 3=inch    ***
+                              // choose the value for the units you're working with
+
+string classes[]   = { "nu", "nu", "nu", "nu", "nu", "nu", "nu", "nu", "" };
+  int isclass;
+  int toclass;
+
+int index[];
+int x1[], y1[], layer[];
+int usedlayer[];
+int n = 1;
+
+string cmd, s;
+
+void disp(int l) {
+  sprintf(s, "DISPLAY NONE %d ;\n", l);
+  cmd += s;
+  return;
+  }
+
+void menue() {
+  int l;
+  int Result = dlgDialog("Change wire with") {
+     string slist[];
+     dlgStretch(0);
+     dlgLabel("Current &Class in Board");
+     dlgComboBox(classes, isclass);
+     dlgLabel("Change Class &to");
+     dlgComboBox(classes, toclass);
+     dlgGroup("&Current Working Grid") {
+        dlgRadioButton("m&ic", Gridval);
+        dlgRadioButton("&mm", Gridval);
+        dlgRadioButton("mi&l", Gridval);
+        dlgRadioButton("inc&h", Gridval);
+        }
+     dlgStretch(1);
+     dlgHBoxLayout {
+        dlgStretch(0);
+        dlgPushButton("+&OK") dlgAccept();
+        dlgStretch(1);
+        dlgPushButton("-&Cancel") dlgReject();
+        dlgStretch(0);
+        }
+     dlgStretch(0);
+     };
+  if (Result == 0) exit (0);
+  return;
+  }
+
+// main
+if (board) board(B) {
+   B.classes(S) {
+      classes[S.number]   = S.name;
+      }
+   menue();
+   sprintf(s, "GRID %s FINEST;\n", grid[Gridval]);
+   cmd += s;
+   sprintf(s, "CHANGE CLASS %d;\n", toclass);
+   cmd += s;
+   B.signals(S) {
+      if (S.class.number == isclass) {
+         S.wires(W) {
+            x1[n] = W.x1;
+            y1[n] = W.y1;
+            layer[n] = W.layer;
+            n++;
+            break;
+            }
+         }
+      }
+
+   sort(n, index, layer);
+   int dl = 0;
+   for (int i = 1; i < n; ++i) {
+      if(dl != layer[index[i]]) {
+         dl = layer[index[i]];
+         disp(dl);
+         usedlayer[dl] = 1;
+         }
+      switch (Gridval) {
+         case 0: sprintf(s, "CHANGE CLASS %d (%.3f %.3f);\n", toclass,
+                           u2mic(x1[index[i]]), u2mic(y1[index[i]]) );
+                 break;
+
+         case 1: sprintf(s, "CHANGE CLASS %d (%.3f %.3f);\n", toclass,
+                           u2mm(x1[index[i]]), u2mm(y1[index[i]]) );
+                 break;
+
+         case 2: sprintf(s, "CHANGE CLASS %d (%.3f %.3f);\n", toclass,
+                           u2mil(x1[index[i]]), u2mil(y1[index[i]]) );
+                 break;
+
+         case 3: sprintf(s, "CHANGE CLASS %d (%.3f %.3f);\n", toclass,
+                           u2inch(x1[index[i]]), u2inch(y1[index[i]]) );
+                 break;
+         }
+      cmd += s;
+      }
+   cmd += "DISPLAY ";
+   B.layers(L) {
+      if (L.visible) {
+         sprintf(s, "%d ",L.number);
+         cmd += s;
+         }
+      }
+   cmd += ";\nGRID LAST;\n";
+   exit (cmd);
+   }
+
+else dlgMessageBox("Start this ULP in a Board", "OK");

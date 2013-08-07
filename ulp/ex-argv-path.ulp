@@ -1,0 +1,17 @@
+#usage "<b>Example: Usage of argv</b>\n"
+       "<p>"
+       "Returns the path of the ULP."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+void main(void) {
+   string ulp_path = "";
+   char c = '/';
+   int pos = strrchr(argv[0], c);
+   if (pos >= 0) {
+      ulp_path = strsub(argv[0], 0, pos + 1);
+   }
+   dlgMessageBox(ulp_path , "+OK");
+}

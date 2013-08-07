@@ -1,0 +1,43 @@
+#usage "<b>Edit previous package description</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+string pac[];
+string edit = "";
+int    count = 0;
+int    n = 0;
+
+if (library) library(L) {
+  L.packages(P) {
+    count++;
+    pac[count] = P.name;
+    cmd += P.name + "\n";
+    }
+  }
+
+if (package) package(P) {
+  edit = P.name;
+  }
+
+for (n = 1; n < count; n++) {
+    if (edit == pac[n]) {
+      break;
+      }
+    }
+
+if (n > 1) {
+  cmd = "EDIT " + pac[n - 1] + ".pac;\n DESCRIPT\n" ;
+  // **************************************************
+  //  a ";" must not follow DESCRIPT
+  //  otherwise the description is overwritten
+  //  with an empty string
+  // **************************************************
+  }
+
+else
+  cmd = "EDIT " + pac[0] + ".pac;\n DESCRIPT\n" ;
+
+exit(cmd);

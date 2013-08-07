@@ -1,0 +1,19 @@
+# Diese Scriptdatei trifft Voreinstellungen, die fuer das
+# Bearbeiten von Elektro-Schaltplaenen geeignet sind.
+# Starten Sie das Script vom Schaltplan-Editor aus.
+
+GRID INCH 0.1 2 lines on;
+GRID ALT INCH 0.01;
+
+SET AUTO_JUNCTION OFF;
+SET WIRE_BEND 2;
+
+
+# Textmenue
+
+MENU 'Tools {\
+              Attribute verwalten : RUN e-attributverwaltung.ulp; | \
+              Brueckenverwaltung : RUN e-brueckenverwaltung.ulp; | \
+              Klemmenplan : RUN e-klemmenplan.ulp; \
+           }'\
+;

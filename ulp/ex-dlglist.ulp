@@ -1,0 +1,25 @@
+#usage "<b>Example: Two multiline text viewer fields</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string Text = "This is some text.\nLine 2\nLine 3";
+string Text2 = "This is text number 2\nLine 2\nLine 3";
+Text2 += "\n...\n...\n...\n...\n...\n...\n...\n...\n";
+Text2 += "end of text2.";
+
+int Result = dlgDialog("List-Fenster") {
+  dlgVBoxLayout {
+    dlgLabel("&View text 1");
+    dlgTextView(Text);
+
+    dlgLabel("Vie&w text 2");
+    dlgTextView(Text2);
+    }
+  dlgHBoxLayout {
+    dlgStretch(1);
+    dlgPushButton("+OK") dlgAccept();
+    }
+  };
+if (Result == 0) exit (0);

@@ -1,0 +1,9 @@
+# Changes the Fill Style
+#
+# Simple example to define your own fill styles.
+
+Set Fill_Layer Top Solid;
+Set Fill_Layer Bottom Solid;
+Set Fill_Layer tPlace Solid;
+Set Fill_Layer bPlace Solid;
+Set Display_Mode Real;

@@ -1,0 +1,120 @@
+#usage "<b>Copy text (Layer) into layer</b>\n"
+       "<p>"
+       "Generates a command sequence which copies the texts-wires "
+       "of texts of your layout into user layer(s)."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string Version = "1.01";
+// 2006.03.07 search text in Board-Layer outside Element alf@cadsoft.de
+
+int    is_layer  = 0;
+int    all_layer = 0;
+int    to_layer  = 100;
+string cmd;
+string h;
+string scriptfile;
+
+int    use_layer[];
+
+void header(void) {
+  sprintf(cmd, "# Exported from %s by %s\n", scriptfile, EAGLE_SIGNATURE );
+  cmd += "SET UNDO_LOG OFF;\n";         // advisable for speed reasons
+  cmd += "set wire_bend 2;\n";
+  cmd += "GRID mm;\n";
+}
+
+
+void text(UL_TEXT T) {
+  T.wires(W) {
+    sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+             u2mm(W.width), u2mm(W.x1), u2mm(W.y1), u2mm(W.x2), u2mm(W.y2) );
+    cmd += h;
+  }
+  return;
+}
+
+void checklayer(UL_TEXT T) {
+  int layer = T.layer;
+  if (all_layer || T.layer == is_layer) {
+    if(!use_layer[layer]) {
+      sprintf(h, "Layer %d Text%d;\n", to_layer + layer, to_layer + layer);
+      cmd += h;
+      use_layer[layer] = 1;
+    }
+    sprintf(h, "Change Layer %d;\n", to_layer + layer);
+    cmd += h;
+    text(T);
+  }
+  return;
+}
+
+//  Distance menue
+int menue(void) {
+  int d = dlgDialog("Place Text as Wire") {
+    dlgLabel(usage);
+    dlgHBoxLayout {
+      dlgLabel("this &Layer");
+      dlgSpacing(10);
+      dlgIntEdit(is_layer);
+      dlgSpacing(10);
+      dlgCheckBox("&all Layer", all_layer);
+      dlgStretch(1);
+    }
+    dlgHBoxLayout {
+      dlgLabel("Layer &offset");
+      dlgIntEdit(to_layer);
+      dlgStretch(1);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+&OK") dlgAccept();
+      dlgPushButton("-&Cancel") dlgReject();
+      dlgStretch(1);
+    }
+  };
+  return d;
+}
+
+if (board) board(B) {
+  if (!menue()) exit (0);
+  scriptfile = filesetext(B.name, ".scr");
+  header();
+  B.texts(T) {    // Texts        // only search in Board 2006.03.07 alf@cadsoft.de
+    checklayer(T);
+  }
+  B.elements(E) {
+    E.texts(T) {                // *** smased ***
+      checklayer(T);
+    }
+    E.package.texts(T) {        // *** non smased
+      checklayer(T);
+    }
+  }
+}
+cmd += "SET UNDO_LOG ON;\n";
+cmd += "GRID LAST;\n";
+
+//  EditBox
+int Result = dlgDialog("Copy TEXT as wire") {
+  dlgHBoxLayout {
+     dlgTextEdit(cmd);
+     dlgVBoxLayout {
+        dlgSpacing(300);
+        }
+     }
+  dlgHBoxLayout {
+     dlgSpacing(500);
+     }
+  dlgHBoxLayout {
+     dlgPushButton("+&Execute") dlgAccept();
+     dlgPushButton("-&Cancel") dlgReject();
+     dlgStretch(1);
+     }
+  };
+if (Result == 0) exit(0);
+
+output(scriptfile, "wt") printf("%s", cmd);
+
+exit("script '" + scriptfile + "';\nREMOVE '" + scriptfile + "';\n");

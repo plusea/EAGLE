@@ -1,0 +1,45 @@
+#usage "<b>Rename device/symbol/package in library</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string edit = "";
+string toName = edit;
+
+if (library) library(L) {
+
+   if (deviceset) deviceset(D) {
+      edit = D.name;
+      }
+
+   if (symbol) symbol(S) {
+      edit = S.name;
+      }
+   if (package) package(P) {
+      edit = P.name;
+      }
+
+int Result = dlgDialog("RENAME") {
+  dlgStretch(0);
+  string h;
+  sprintf(h, "<qt>Rename<p><b>%s</b><p>to :</qt>", edit);
+  dlgLabel(h);
+  dlgStretch(0);
+  toName = edit;
+  dlgStringEdit(toName);
+  dlgStretch(0);
+  dlgHBoxLayout {
+     dlgStretch(1);
+     dlgPushButton("+OK") {
+        dlgAccept();
+        }
+     dlgStretch(1);
+     dlgPushButton("-Cancel") dlgReject();
+     dlgStretch(0);
+     };
+  dlgStretch(1);
+  };
+  if (Result == 0) exit (0);
+  exit("RENAME '" + edit + "' '" + toName +"'" );
+}

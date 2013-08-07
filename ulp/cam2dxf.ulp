@@ -1,0 +1,488 @@
+#usage "<b>Convert a CAM job to a script to export DXF data</b>\n"
+       "<p>"
+       "Usage: RUN cam2dxf [ <i>filename</i> ]"
+       "<p>"
+       "Tip: Assign a funktion key with<p>"
+       "<tt>ASSIGN Shift+Ctrl+Alt+P 'run cam2dxf;';</tt>"
+       "<p>"
+       "or"
+       "<p>"
+       "<tt>ASSIGN Shift+Ctrl+Alt+P 'run cam2dxf myjob.cam;';</tt>"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+// CAM-Job token
+string tok_job = "[CAM Processor Job]";
+string tok_Descrition = "Description=";
+string description;
+string descriptionLine[];
+int    descrCnt;
+string tok_Section = "Section=";
+string tok_Sec_n   = "[Sec_";
+string section[];
+string tok_Name    = "Name=";
+string sec_Name[];
+string tok_Prompt  = "Prompt=";
+string sec_Prompt[];
+string tok_Out_put = "Output=";
+string sec_Out_put[];
+
+string tok_Sheet   = "Sheet=";
+int    sec_Sheet[];
+int sheetprint = 0;  // 0 = All, 1 = From To, 2 = This section defined, 3 = Actual
+
+int sheetprint_from[];
+int sheetprint_to[];
+string actualsheet;
+
+string tok_Layers  = "Layers=";
+string sec_Layers[];
+string sec_usedlayer[];
+int    absolutUsedLayer = 0;
+
+string lines[];
+int    nLines;
+string s;
+string nu;
+int    sx = 0;
+
+int    lVisible[];
+int    useLayer[];
+string lNames[] = { " " };
+int    lastsheet = 0;
+string lastSH;
+
+string Unit = " -u MM";
+string AlwaysVertorFont = " -a";
+string UseWireWidth = " -w";
+string FillArea = " -f";
+
+string help = usage+ "<qt><b>This ULP converts a CAM Job to a DXF Export script!</b><p>\n" +
+              "If the layer list is empty after starting this ULP,\n" +
+              "you did not start it from the proper editor window (SCH/BRD).<p>\n" +
+              "CAM jobs for the layout have to be started from the Layout Editor, " +
+              "jobs for a schematic from the Schematic Editor. " +
+              "CAM Jobs can be edited and saved by the CAM processor only.</qt>";
+
+string ulp_path ;
+char bkslash = '/';
+int pos = strrchr(argv[0], bkslash);
+if (pos >= 0) ulp_path = strsub(argv[0], 0, pos + 1);
+
+string cmd = "";
+int test = 0;
+int Result = 0;
+
+// File handling
+int n = 0;
+string text;
+string CAMfileName;
+int nBytes;
+int align;
+string CAMfile;
+
+string Eagle ="<img src=" + ulp_path + "eagle.bmp>";
+
+// *** functions ***
+
+void editsec(int sec) {
+   string num;
+   sprintf(num, "%d", sec);
+   dlgDialog("Section Editor") {
+      dlgLabel("Section " + num);
+      dlgHBoxLayout {
+         dlgPushButton("+&OK") dlgAccept();
+         dlgPushButton("-&Cancel") dlgReject();
+         dlgStretch(1);
+         }
+      };
+   return;
+}
+
+void commandPrint(string sectab) {
+   cmd += "RUN dxf -s " + sectab + Unit + AlwaysVertorFont + UseWireWidth + FillArea + ";\n";
+   return;
+   }
+
+void viewDescript(void) {
+   string ds;
+   for (int n = 1 ; n < descrCnt; n++ ) {
+      if (ds[0] = ' ') {
+         ds = descriptionLine[n];
+         ds[0] = ' ';
+         descriptionLine[n] = ds;
+         }
+      }
+   descriptionLine[0] = "<qt>" + descriptionLine[0] + "</qt>";
+   ds = strjoin(descriptionLine, '\n');
+   dlgMessageBox(ds, "OK");
+   return;
+}
+
+void readCam(void) {
+   sx = 0;
+   for (int sn = 0; sn < nLines; sn++) {
+      if( strstr(lines[sn], tok_Descrition) == 0) {
+         description = strsub(lines[sn], strlen(tok_Descrition) + 1, strlen(lines[sn]) - (strlen(tok_Descrition)+2) );
+         descrCnt = strsplit (descriptionLine, description, '\\');
+         }
+
+      if( strstr(lines[sn], tok_Sec_n) == 0) {
+         sx = strtol( strsub(lines[sn], strstr(lines[sn], "_") + 1) );
+         sprintf(nu, "%d", sx);
+         }
+
+      if( strstr(lines[sn], tok_Name      ) == 0) {;
+         sec_Name[sx] = strsub(lines[sn], strlen(tok_Name) + 1, strlen(lines[sn]) - (strlen(tok_Name)+2) );
+         sheetprint_from[sx] = 1;
+         }
+
+      if( strstr(lines[sn], tok_Prompt    ) == 0) {;
+         sec_Prompt[sx] = strsub(lines[sn], strlen(tok_Prompt) + 1, strlen(lines[sn]) - (strlen(tok_Prompt)+2) );
+         }
+
+      if( strstr(lines[sn], tok_Out_put   ) == 0) {
+         sec_Out_put[sx] = strsub(lines[sn], strlen(tok_Out_put) + 1, strlen(lines[sn]) - (strlen(tok_Out_put)+2) );
+         }
+
+      if( strstr(lines[sn], tok_Sheet ) == 0) {
+         sec_Sheet[sx] = strtod( strsub(lines[sn], strlen(tok_Sheet) , strlen(lines[sn]) - (strlen(tok_Sheet) ) ) );
+         }
+
+      // n Layers (max 255)
+      if( strstr(lines[sn], tok_Layers    ) == 0) {
+         sec_Layers[sx] = strsub(lines[sn], strlen(tok_Layers) + 2, strlen(lines[sn]) - (strlen(tok_Layers)+3) );
+         // hier noch die Layer
+         }
+      }
+   return;
+}
+
+// main
+if (argv[1]) {
+   CAMfileName = argv[1];
+   string dir = filedir(CAMfileName);
+   if (filedir(CAMfileName)) ;
+   else CAMfileName = path_cam[0] + "/" + argv[1];
+   }
+else {
+   CAMfileName = dlgFileOpen("Select CAM File", path_cam[0]+"/*.cam", "*.*");
+   }
+
+if (CAMfileName) {
+   nLines = fileread(lines, CAMfileName);
+   readCam();
+   }
+else exit (0);
+
+if(lines[0] != tok_job) {
+   dlgMessageBox(CAMfileName + "\nis not a EAGLE CAM-Job\n" + lines[0], "OK");
+   exit (0);
+   }
+
+if (schematic) {
+   schematic(S) {
+      if (sheet) sheet(SH) sprintf(actualsheet, "%d", SH.number);
+      }
+   schematic(S) {
+      S.sheets(SH) {
+         if (lastsheet < SH.number) lastsheet = SH.number;
+         }
+      S.layers(L) {
+         lNames[L.number] = L.name;
+         lVisible[L.number] = L.visible;
+         useLayer[L.number] = L.used;
+         }
+      }
+   }
+
+if (board) {
+   board(B) {
+      B.layers(L) {
+         lNames[L.number] = L.name;
+         lVisible[L.number] = L.visible;
+         useLayer[L.number] = L.used;
+         }
+      }
+   }
+
+
+// tabs menue
+Result = dlgDialog("CAM-Job to Print-Command") {
+   //Define a container for tab pages
+   dlgTabWidget {
+      int tpn=1;
+      sheetprint_to[tpn] = lastsheet;
+      while (sec_Name[tpn]) {
+         dlgTabPage(sec_Name[tpn]) {
+            dlgLabel("<b>JOB Name</b>: " + CAMfileName);
+            dlgSpacing(10);
+            dlgStretch(0);
+            dlgHBoxLayout {
+               dlgStretch(0);
+               dlgSpacing(10);
+               dlgLabel(Eagle);
+               dlgSpacing(10);
+               if (board) {
+                  dlgVBoxLayout {
+                     dlgGroup("Suffix") dlgLabel(sec_Out_put[tpn]);
+                     dlgStretch(1);
+                     }
+                  }
+               dlgStretch(0);
+               dlgHBoxLayout {
+                  dlgStretch(0);
+                  dlgVBoxLayout {
+                     if (schematic) {
+                        dlgStretch(0);
+                        dlgGroup("Sheet") {
+                           dlgVBoxLayout {
+                              dlgHBoxLayout {
+                                 dlgRadioButton("&All ", sheetprint);
+                                 dlgLabel(" ");
+                                 dlgStretch(1);
+                                 }
+                              dlgHBoxLayout {
+                                 dlgRadioButton("&From ", sheetprint);
+                                 dlgLabel("S&heet ");
+                                 dlgIntEdit(sheetprint_from[tpn], 1, lastsheet);
+                                 dlgLabel(" &to ");
+                                 dlgIntEdit(sheetprint_to[tpn], sheetprint_from[tpn], lastsheet);
+                                 dlgStretch(1);
+                                 }
+                              dlgHBoxLayout {
+                                 dlgRadioButton("&# ", sheetprint);
+                                 string sl;
+                                 sprintf(sl, "%d/%d", sec_Sheet[tpn], lastsheet);
+                                 dlgLabel(sl + " (def. in section)");
+                                 dlgStretch(1);
+                                 }
+                              dlgHBoxLayout {
+                                 dlgRadioButton("Actua&l ", sheetprint);
+                                 dlgLabel(actualsheet);
+                                 dlgStretch(1);
+                                 }
+                              }
+                           }
+                        }        // if schematic
+                     dlgStretch(1);
+                     }
+                  // *** Layer list to print ***
+                  int Seleclayer;
+                  string layer[] ;
+                  int n = 0;
+                  int ln = strsplit(layer, sec_Layers[tpn], ' ');
+                  for (int x = 0; x < ln; x++) {
+                     int num = strtod(layer[x]);
+                     if (useLayer[num]) {
+                        if(schematic) {
+                           if (num >= 90) {
+                              sprintf(sec_usedlayer[n], "%3s %s", layer[x], lNames[num]);
+                              n++;
+                              }
+                           }
+                        if(board) {
+                           if (num < 90 || num > 100) {
+                              sprintf(sec_usedlayer[n], "%3s %s", layer[x], lNames[num]);
+                              n++;
+                              }
+                           }
+                        }
+                     }
+                  sec_usedlayer[n] = "";  // clear last+1
+                  absolutUsedLayer = n;
+                  dlgStretch(0);
+                  dlgSpacing(10);
+                  dlgVBoxLayout {
+                     if (absolutUsedLayer) {
+                        dlgHBoxLayout { dlgSpacing(100); }
+                        dlgLabel("Printed layers");
+                        dlgListBox(sec_usedlayer, Seleclayer);
+                        }
+                     else {
+                        dlgLabel("<img src=" + ulp_path + "warning.bmp>");
+                        dlgLabel("no Layers selected\nin this CAM-Job/Section!\nLoad a correct Job.");
+                        }
+                     }
+                  dlgSpacing(10);
+                  }
+               dlgStretch(1);
+               }
+            dlgStretch(1);
+            tpn++;
+            }
+         }                 // ************ End of TAB | SHEET ***********
+      dlgTabPage("&Help") {
+         dlgSpacing(10);
+         dlgHBoxLayout {
+            dlgSpacing(10);
+            dlgVBoxLayout {
+               dlgHBoxLayout {
+                  dlgLabel(Eagle);
+                  dlgSpacing(10);
+                  dlgVBoxLayout {
+                     dlgLabel(EAGLE_SIGNATURE);
+                     dlgSpacing(10);
+                     if (description) {
+                        dlgHBoxLayout {
+                           dlgPushButton("&Show Job Description") viewDescript();
+                           dlgStretch(1);
+                           }
+                        }
+                     else dlgLabel("CAM Job description is EMPTY");
+                     }
+                  dlgStretch(1);
+                  }
+                  dlgSpacing(10);
+               dlgLabel(help);
+               dlgStretch(1);
+               }
+            }
+         }
+      }                // ************ End of all TABs ***********
+   dlgHBoxLayout {
+      dlgStretch(0);
+      dlgPushButton("+OK") dlgAccept();
+      dlgStretch(0);
+      dlgPushButton("-Cancel") dlgReject();
+      dlgStretch(1);
+      dlgPushButton("&Load CAM-File") {
+         CAMfileName = dlgFileOpen("select a File", path_cam[0]+"/*.cam", "");
+         if (CAMfileName) {
+            exit ("run " + filesetext(argv[0], " ")  + " '" + CAMfileName + "';\n");
+            }
+         }
+      dlgStretch(1);
+      }
+   };
+
+if (Result == 0) exit (0);
+
+if (test) cmd = "# generatet by " + argv[0] + " from " + CAMfileName + "\n";
+
+for (int tpn = 1; tpn <= sx; tpn++) {
+   string layer[] ;
+   int n = 0;
+   int ln = strsplit(layer, sec_Layers[tpn], ' ');
+   if (test) cmd += "# Section: " + sec_Name[tpn] + "\n";
+   if(board) {
+      cmd += "SET DISPLAY_MODE REAL;\n";
+      cmd += "RATSNEST;\n";
+      cmd += "DISPLAY NONE ";
+
+      for (int x = 0; x < ln; x++) {
+         int num = strtod(layer[x]);
+         if (num < 90 || num > 100) {
+            if (useLayer[num]) {
+               sprintf(s, " %3s", layer[x]);
+               cmd += s;
+               if(num == 21) cmd += " -23 -25 -27 -51";
+               if(num == 22) cmd += " -24 -26 -28 -52";
+               n++;
+               }
+            }
+         }
+      cmd += ";\n";
+      commandPrint(sec_Out_put[tpn]);
+      }
+
+   if(schematic) {
+      cmd += "DISPLAY NONE ";
+      for (int x = 0; x < ln; x++) {
+         int num = strtod(layer[x]);
+         if (useLayer[num]) {
+            if (num >= 90) {
+               sprintf(s, " %3s", layer[x]);
+               cmd += s;
+               n++;
+               }
+            }
+         }
+      cmd += ";\n";
+      string sh;
+      string shn;
+      switch (sheetprint) {
+         case 0 : schematic(S) {
+                     S.sheets(SH) {
+                        sprintf(sh, "EDIT '.s%d';\n", SH.number);
+                        cmd += sh;
+                        sprintf(shn, "_s%d", SH.number);
+                        commandPrint(shn);
+                        }
+                     }
+                  break;
+
+         case 1 : for (int prn = sheetprint_from[tpn]; prn <= sheetprint_to[tpn]; prn++) {
+                     sprintf(sh, "EDIT '.s%d';\n", prn);
+                     cmd += sh;
+                     sprintf(shn, "_s%d", prn);
+                     commandPrint(shn);
+                     }
+                  break;
+
+         case 2 : sprintf(sh, "EDIT '.s%d';\n", sec_Sheet[tpn]);
+                  cmd += sh;
+                  sprintf(shn, "_s%d", sec_Sheet[tpn]);
+                  commandPrint(shn);
+                  break;
+
+         case 3 : sprintf(sh, "EDIT '.s%s';\n", actualsheet);
+                  cmd += sh;
+                  sprintf(shn, ".s%s", actualsheet);
+                  commandPrint(shn);
+                  break;
+         }
+      }
+   }
+
+cmd += "DISPLAY ";
+if(board) {
+   for(int l = 1; l < 90; l++) {
+      if (useLayer[l]) {
+         if (lVisible[l]) {
+            sprintf(s, " %d", l);
+            cmd += s;
+            }
+         else {
+            sprintf(s, " -%d", l);
+            cmd += s;
+            }
+         }
+      }
+   for(l = 100; l < 256; l++) {
+      if (useLayer[l]) {
+         if (lVisible[l]) {
+            sprintf(s, " %d", l);
+            cmd += s;
+            }
+         else {
+            sprintf(s, " -%d", l);
+            cmd += s;
+            }
+         }
+      }
+   cmd += ";\n";
+   }
+
+if(schematic) {
+   for(int l = 91; l < 256; l++) {
+      if (useLayer[l]) {
+         if (lVisible[l]) {
+            sprintf(s, " %d", l);
+            cmd += s;
+            }
+         else {
+            sprintf(s, " -%d", l);
+            cmd += s;
+            }
+         }
+      }
+   cmd += ";\n";
+   sprintf(s, "EDIT '.s%s';\n", actualsheet);
+   cmd += s;
+   }
+
+if (test) { if (dlgMessageBox(cmd, "OK", "ESC") != 0) exit (-1);}
+exit (cmd);

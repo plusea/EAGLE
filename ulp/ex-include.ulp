@@ -1,0 +1,22 @@
+#usage "<b>Example: Usage of include file</b>\n"
+       "<p>"
+       "Demonstrates how to use the include file 'useful-routines.ulp'."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+#include "useful-routines.ulp"
+
+int Result;
+string s1, s2, h;
+
+s1 = "DISPLAY ALL;\n";
+s2 = get_ulp_name();
+Result = edit_save_execute(s1, s2);
+sprintf(h, "Result: %d", Result);
+dlgMessageBox(h, "OK");
+
+dlgMessageBox("ULP path: "+get_ulp_path(),"OK");
+
+dlgMessageBox("Project path: "+get_project_path(),"OK");

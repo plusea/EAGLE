@@ -1,0 +1,21 @@
+<language en>
+<b>Script Files</b>
+<p>
+Script files are a powerful tool. They can contain
+long sequences of commands, such as the specification
+of specific colors and fill-patterns for layers.
+Since every EAGLE operation can be carried out with the
+help of text commands, you can, for example, import data or
+configure EAGLE with the aid of script files.
+</language>
+<language de>
+<b>Script-Dateien</b>
+<p>
+Script-Dateien sind ein überaus leistungsfähiges Werkzeug.
+Sie können längere Befehlssequenzen, etwa die Einstellung
+bestimmter Farben oder Füllmuster für Layer enthalten.
+Da sich jede EAGLE-Operation mit Hilfe von Text-Befehlen
+ausführen lässt, können Sie zum Beispiel mit Hilfe von
+Script-Dateien Daten importieren oder EAGLE nach Ihren
+Bedürfnissen konfigurieren.
+</language>

@@ -1,0 +1,84 @@
+#usage "<b>Generate a mask to fill vias for vacuum adapter.</b>\n"
+       "<p>"
+       "To delete the elements in user layer afterwards, display it without "
+       "any other layers, and use GROUP and DELETE. Then remove the user "
+       "layer with the command LAYER -number."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+
+int userlayer = 101;
+if (argv[1]) userlayer = strtol(argv[1]);
+if (!userlayer) {
+   int Result = dlgDialog("Fill mask for vacuum") {
+      dlgLabel(usage);
+      dlgHBoxLayout {
+         dlgIntEdit(userlayer);
+         dlgStretch(1);
+         dlgPushButton("+OK") dlgAccept();
+         dlgStretch(1);
+         dlgPushButton("-Cancel") dlgReject();
+      }
+   };
+   if (!Result) exit (0);
+}
+
+string cmd;
+sprintf(cmd, "SET WIRE_BEND 2;\nGRID mm;\nLayer %d FillVia;\nchange layer %d;\n", userlayer, userlayer);
+
+void  center(int x, int y, int diameter, int shape) {
+   real radius = u2mm(diameter) / 2;
+   string h;
+   switch (shape) {
+      case VIA_SHAPE_SQUARE  : sprintf(h, "RECT (%.4f %.4f) (%.4f %.4f) ;\n",
+                                       u2mm(x) - radius, u2mm(y) - radius, u2mm(x) + radius, u2mm(y) + radius );
+                               break;
+
+      case VIA_SHAPE_ROUND   : sprintf(h, "CIRCLE 0 (%.4f %.4f) (%.4f %.4f) ;\n",
+                                       u2mm(x), u2mm(y), u2mm(x) + radius, u2mm(y) );
+                               break;
+
+      case VIA_SHAPE_OCTAGON : real pwidth = 0.2032;
+                               real frame = radius - pwidth/2;
+                               sprintf(h, "CHANGE STYLE 0;\nPOLYGON %.4f (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\n",
+                                      pwidth,
+                                      u2mm(x) - frame,
+                                      u2mm(y) - frame * 0.4139,
+                                      u2mm(x) - frame * 0.4139,
+                                      u2mm(y) - frame,
+                                      u2mm(x) + frame * 0.4139,
+                                      u2mm(y) - frame,
+                                      u2mm(x) + frame,
+                                      u2mm(y) - frame * 0.4139,
+                                      u2mm(x) + frame,
+                                      u2mm(y) + frame * 0.4139,
+                                      u2mm(x) + frame * 0.4139,
+                                      u2mm(y) + frame,
+                                      u2mm(x) - frame * 0.4139,
+                                      u2mm(y) + frame,
+                                      u2mm(x) - frame,
+                                      u2mm(y) + frame * 0.4139,
+                                      u2mm(x) - frame,
+                                      u2mm(y) - frame * 0.4139
+                                     );
+                                break;
+   }
+  cmd += h;
+  return;
+}
+
+if (board) board(B) {
+  B.signals(S) {
+    S.vias(V) {
+      if(V.start == 1 && V.end == 16) {
+        center(V.x, V.y, V.diameter[1], V.shape[1]);
+      }
+    }
+  }
+  exit (cmd);
+}
+
+else dlgMessageBox("Start this ULP in a Board!", "OK");
+exit (0);

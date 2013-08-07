@@ -1,0 +1,21 @@
+#usage "<b>Run a SCRIPT through all devicesets in a library</b><p>\n"
+       "RUN run-loop-all-devicesets-script [SCRIPT]<br>"
+       "<author>Author: librarian@cadsoft.de</author><p><p>"
+
+string Version = "1.0";       // 2008-08-28
+string ScriptFile = argv[1];
+string cmd, s;
+
+if  (library) {
+  library(L) {
+    if (!ScriptFile) ScriptFile = dlgFileOpen("Select a SCRIPT to run in all DEVICESETS", path_scr[0], "*.scr");
+    if (!ScriptFile) exit(0);
+    L.devicesets(DS) {
+       sprintf(s, "EDIT %s.DEV;\nSCRIPT '%s';\n", DS.name, ScriptFile);
+       cmd += s;
+    }
+  }
+  exit (cmd);
+}
+
+else dlgMessageBox("Start this ULP from a Library", "OK");

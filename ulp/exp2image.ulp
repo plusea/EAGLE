@@ -1,0 +1,414 @@
+#usage "<b>Export a SCH/BRD to IMAGE</b><p>"
+       "Usage: RUN exp2image monochrome resolution image type layer <i>[layer layer]</i>"
+       "<p><nobr>"
+       "Tip: Assign a funktion key with<br>"
+       "<tt>ASSIGN Shift+Ctrl+Alt+I 'run exp2image monochrome 150 .tif 1 17 18 20;';</tt><br>"
+       "or<br>"
+       "<tt>ASSIGN Shift+Ctrl+Alt+I 'run exp2image color 150 .bmp 91 92 94 95 96;';</tt>"
+       "<p></nobr>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+// 2005-02-17 alf@cadsoft.de  empty layers are not selectable
+// 2008-06-23 alf@cadsoft.de  do it also in deviceset, symbol and package
+
+
+string file_name;
+
+string brd_suffix;
+int    ratsnest = 0;       // start Ratsnest befor export image
+
+int    sheetprint_from;
+int    sheetprint_to;
+int    lastsheet = 0;
+string actualsheet;
+int    sheetprint = 0;     // 0 = All, 1 = From To, 2 = Actual
+
+string exp_Layers;
+string sec_usedlayer[];
+int    absolutUsedLayer = 0;
+
+int    lVisible[];
+int    useLayer[];
+string lNames[] = { " " };
+
+int    Resolution = 150; // DPI
+string monochrome = "";
+int    sel_monochrome = 0;
+
+string filetype[] = { ".bmp", // Windows-Bitmap-Datei
+                      ".png", // Portable-Network-Graphics-Datei
+                      ".pbm", // Portable-Bitmap-Datei
+                      ".pgm", // Portable-Grayscale-Bitmap-Datei
+                      ".ppm", // Portable-Pixelmap-Datei
+                      ".xbm", // X-Bitmap-Datei
+                      ".xpm", // X-Pixmap-Datei
+                      ".tif"  // Tiff-Datei
+                    };
+
+int    select_type = 0;
+
+string cmd = "";
+int    Result = 0;
+string s;
+
+string help = usage;
+
+
+// *** functions ***
+void commandPrint(string name_suffix) {
+  string h;
+  sprintf(h, "EXPORT IMAGE '%s%s%s' %s %d;\n", file_name, name_suffix, filetype[select_type], monochrome, Resolution);
+  cmd += h;
+  return;
+}
+
+
+// main
+int nt = 0;
+do {
+  if(strlwr(argv[3]) == filetype[nt]) {
+    select_type = nt;
+    break;
+  }
+  nt++;
+} while(filetype[nt]);
+
+if (argv[2]) Resolution = strtol(argv[2]);
+
+if (argv[1]) {
+  string mono = strupr(argv[1]);
+  if (mono == "MONOCHROME") sel_monochrome = 1;
+  else if (mono == "COLOR") sel_monochrome = 0;
+  else {
+    dlgMessageBox("Use MONOCHROME or COLOR", "Ok");
+    exit(0);
+  }
+}
+
+int an = 0;
+do {
+  if (argv[4+an]) {
+    exp_Layers += " " + argv[4+an];
+    an++;
+  }
+  else break;
+} while (an);
+
+if (schematic) {
+  schematic(S) {
+    file_name = filesetext(S.name, "");
+    if (sheet) sheet(SH) sprintf(actualsheet, "%d", SH.number);
+    S.sheets(SH) {
+      lastsheet = SH.number;
+    }
+    S.layers(L) {
+      lNames[L.number] = L.name;
+      lVisible[L.number] = L.visible;
+      useLayer[L.number] = L.used;
+    }
+  }
+  sheetprint_to = lastsheet;
+}
+
+else if (board) {
+  board(B) {
+    file_name = filesetext(B.name, "");
+    B.layers(L) {
+      lNames[L.number] = L.name;
+      lVisible[L.number] = L.visible;
+      useLayer[L.number] = L.used;
+    }
+  }
+}
+
+else if (package || symbol || deviceset) {
+  library(LBR) {
+    if (package) package(P) file_name = P.name;
+    else if(symbol) symbol(SYM) file_name = SYM.name;
+    else if (deviceset) deviceset(DEV) file_name = DEV.name;
+    LBR.layers(L) {
+      lNames[L.number] = L.name;
+      lVisible[L.number] = L.visible;
+      useLayer[L.number] = L.used;
+    }
+  }
+}
+
+else {
+  dlgMessageBox("Start this ULP in a SCH, BRD, DEV, PAC or SYM:", "OK");
+  exit(-1);
+}
+
+// *** tabs menue ***
+Result = dlgDialog("Export Image") {
+  // Define a container for tab pages
+  dlgLabel(file_name);
+
+  dlgTabWidget {
+    dlgTabPage("&Export to Image") {
+      dlgHBoxLayout {
+        dlgStretch(0);
+
+        if (board) {
+
+          string Example = "<nobr>Example: <i>_top </i> --> " + filename(file_name) + "<b>_top</b>" + filetype[select_type] + "</nobr>";
+          dlgVBoxLayout {
+            dlgSpacing(4);
+            dlgHBoxLayout {
+              dlgSpacing(8);
+              dlgCheckBox("Start &RATSNEST befor export ", ratsnest);
+              dlgStretch(1);
+            }
+            dlgStretch(1);
+            dlgHBoxLayout {
+              dlgSpacing(8);
+              dlgLabel("&File suffix ");
+              dlgStringEdit(brd_suffix);
+              dlgStretch(1);
+            }
+            dlgHBoxLayout {
+              dlgSpacing(8);
+              dlgLabel(Example);
+              dlgStretch(1);
+            }
+          }
+        }  // end if board
+
+        if (package) {
+        }  // end if package
+
+        if (schematic) {
+          dlgSpacing(8);
+          dlgGroup("Sheet") {
+            dlgVBoxLayout {
+              dlgHBoxLayout {
+                dlgRadioButton("&All sheets", sheetprint);
+                dlgLabel(" ");
+                dlgStretch(1);
+              }
+              dlgHBoxLayout {
+                dlgRadioButton("&Select ", sheetprint);
+                dlgLabel(" &from ");
+                dlgIntEdit(sheetprint_from, 1, lastsheet);
+                dlgLabel(" &to ");
+                dlgIntEdit(sheetprint_to, sheetprint_from, lastsheet);
+                dlgStretch(1);
+              }
+              dlgHBoxLayout {
+                dlgRadioButton("A&ctual sheet #", sheetprint);
+                dlgLabel(actualsheet);
+                dlgStretch(1);
+              }
+            }
+            dlgStretch(1);
+          }
+        }   // end if schematic
+
+        if (deviceset || symbol) {
+        }   // end if deviceset/symbol
+
+        // *** Layer list to print ***
+        int Seleclayer;
+        string layer[] ;
+        int n = 0;
+        int ln = strsplit(layer, exp_Layers, ' ');
+        for (int x = 0; x < ln; x++) {
+          int num = strtod(layer[x]);
+          if (useLayer[num]) {
+            if(schematic || deviceset || symbol) {  // 2008-06-23
+              if (num >= 90) {
+                sprintf(sec_usedlayer[n], "%3s %s", layer[x], lNames[num]);
+                n++;
+              }
+            }
+            if(board || package) {                  // 2008-06-23
+              if (num < 90 || num > 100) {
+                sprintf(sec_usedlayer[n], "%3s %s", layer[x], lNames[num]);
+                n++;
+              }
+            }
+          }
+        }
+        sec_usedlayer[n] = "";  // clear last+1
+        absolutUsedLayer = n;
+        dlgSpacing(10);
+        dlgVBoxLayout {
+          if (absolutUsedLayer) {
+            dlgHBoxLayout {
+              dlgSpacing(100);
+            }
+            dlgLabel("Printed layers");
+            dlgListBox(sec_usedlayer, Seleclayer);
+          }
+          else {
+            dlgLabel("<img src=warning.bmp>");
+            dlgLabel("No Layers selected.");
+          }
+          dlgStretch(0);
+        }
+        dlgStretch(1);
+      }
+      dlgStretch(1);
+    } // ************ End of TAB | SHEET ***********
+
+    dlgTabPage("&Help") {
+      dlgHBoxLayout {
+        dlgSpacing(10);
+        dlgVBoxLayout {
+          dlgLabel(help);
+          dlgStretch(1);
+        }
+      }
+    }
+  }                // ************ End of all TABs ***********
+
+  dlgHBoxLayout {
+    dlgLabel("&Image type");
+    dlgComboBox(filetype, select_type);
+    dlgSpacing(15);
+    dlgCheckBox("&Monochrome", sel_monochrome);
+    dlgSpacing(15);
+    dlgLabel("Resolution &DPI");
+    dlgIntEdit(Resolution, 50, 600);
+    dlgStretch(1);
+  }
+  dlgHBoxLayout {
+    dlgStretch(0);
+    dlgPushButton("+OK") dlgAccept();
+    dlgStretch(0);
+    dlgPushButton("-Cancel") dlgReject();
+    dlgStretch(1);
+  }
+};
+
+if (Result == 0) exit (0);
+if (!absolutUsedLayer) exit(0);
+
+if (sel_monochrome) monochrome = "MONOCHROME";
+else monochrome = "";
+
+
+string layer[] ;
+int n = 0;
+int ln = strsplit(layer, exp_Layers, ' ');
+if(board || package) {                      // 2008-06-23
+  cmd += "SET DISPLAY_MODE REAL;\n";
+  if (ratsnest) cmd += "RATSNEST;\n";
+  cmd += "DISPLAY NONE ";
+
+  for (int x = 0; x < ln; x++) {
+    int num = strtod(layer[x]);
+    if (num < 90 || num > 100) {
+      if (useLayer[num]) {
+        sprintf(s, " %3s", layer[x]);
+        cmd += s;
+        if(num == 21) cmd += " -23 -25 -27 -51";
+        if(num == 22) cmd += " -24 -26 -28 -52";
+        n++;
+      }
+    }
+  }
+  cmd += ";\n";
+  if (board) commandPrint(brd_suffix);
+  else if (package) commandPrint("-PAC");
+}
+
+if(schematic || deviceset || symbol) {
+  cmd += "DISPLAY NONE ";
+  for (int x = 0; x < ln; x++) {
+    int num = strtod(layer[x]);
+    if (useLayer[num]) {
+      if (num >= 90) {
+        sprintf(s, " %3s", layer[x]);
+        cmd += s;
+        n++;
+      }
+    }
+  }
+  cmd += ";\n";
+  string sh;
+  string shn;
+  if (schematic) {  // 2008-06-23
+    switch (sheetprint) {
+      case 0 : schematic(S) {
+               S.sheets(SH) {
+                 sprintf(sh, "EDIT '.s%d';\n", SH.number);
+                 cmd += sh;
+                 sprintf(shn, "_s%d", SH.number);
+                 commandPrint(shn);
+               }
+             }
+             break;
+
+      case 1 : for (int prn = sheetprint_from; prn <= sheetprint_to; prn++) {
+               sprintf(sh, "EDIT '.s%d';\n", prn);
+               cmd += sh;
+               sprintf(shn, "_s%d", prn);
+               commandPrint(shn);
+             }
+             break;
+
+      case 2 : sprintf(sh, "EDIT '.s%s';\n", actualsheet);
+             cmd += sh;
+             sprintf(shn, "_s%s", actualsheet);
+             commandPrint(shn);
+             break;
+    }
+  }
+  else if (deviceset) commandPrint("-DEV");
+  else if (symbol) commandPrint("-SYM");
+
+}
+
+cmd += "DISPLAY ";
+if(board || package) {
+  for(int l = 1; l < 90; l++) {
+    if (useLayer[l]) {
+      if (lVisible[l]) {
+        sprintf(s, " %d", l);
+        cmd += s;
+      }
+      else {
+        sprintf(s, " -%d", l);
+        cmd += s;
+      }
+    }
+  }
+  for(l = 100; l < 256; l++) {
+    if (useLayer[l]) {
+      if (lVisible[l]) {
+        sprintf(s, " %d", l);
+        cmd += s;
+      }
+      else {
+        sprintf(s, " -%d", l);
+        cmd += s;
+      }
+    }
+  }
+  cmd += ";\n";
+}
+
+if(schematic || deviceset || symbol) { // 2008-06-23
+  for(int l = 91; l < 256; l++) {
+    if (useLayer[l]) {
+      if (lVisible[l]) {
+        sprintf(s, " %d", l);
+        cmd += s;
+      }
+      else {
+        sprintf(s, " -%d", l);
+        cmd += s;
+      }
+    }
+  }
+  cmd += ";\n";
+  if(schematic) {      // 2008-06-23 alf@cadsoft.de
+    sprintf(s, "EDIT '.s%s';\n", actualsheet);
+    cmd += s;
+  }
+}
+
+exit (cmd);

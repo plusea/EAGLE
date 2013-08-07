@@ -1,0 +1,53 @@
+#usage "<b>Export data for SMD glue dispenser equipment</b>\n"
+       "<p>"
+       "This program is used in conjunction with gluemark.ulp.<br>"
+       "It generates top and bottom glue data from circles on layers 111 and 112."
+       "<p>"
+       "Define output format in function <i>outputdata</i>."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string top_data_filename    = "gluetop.dat";
+string bottom_data_filename = "gluebot.dat";
+
+void outputdata (UL_CIRCLE C){
+
+//**** change the following line to adjust the output format ******
+  printf("Gluepoint coordinates: %f %f\n", u2inch(C.x),u2inch(C.y));
+}
+
+void header (UL_BOARD B){
+  printf("#%s\n\n", EAGLE_SIGNATURE);
+  printf("#Gluepoints exported from %s\n#at %s\n\n", B.name, t2string(time()));
+}
+
+if (board) {
+output(top_data_filename) {
+ board(B){
+  header(B);
+   B.circles(C){
+     if (C.layer == 111) {
+        outputdata(C);
+        }
+   }
+ }
+}
+
+output(bottom_data_filename) {
+ board(B){
+  header(B);
+   B.circles(C){
+     if (C.layer == 112) {
+        outputdata(C);
+        }
+   }
+ }
+}
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Board    \n");
+   exit (0);
+}

@@ -1,0 +1,71 @@
+#usage "<b>Count Pads, Vias, Smds and Holes of a board</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+int i, j, k, h, l, s ;
+i = j = k = h = l = 0;
+
+if (board) {
+board(B) {
+   B.holes(L) {
+     h++;
+     }
+
+   B.elements(E) {
+     E.package.holes(H) {
+       h++;
+       }
+     E.package.contacts(C) {
+
+       if (C.pad)
+          i++ ;
+       if (C.smd && (C.smd.layer == 1))
+          j++ ;
+       if (C.smd && (C.smd.layer == 16))
+          l++;
+       }
+   }
+
+  B.signals(S) {
+     S.vias(V) {
+          k++;
+     }
+  }
+
+string result;
+
+ sprintf(result,
+ " Number of Pads:  %d\n\
+ Number of Vias:  %d\n\
+ Number of Smds:  %d\n\
+    Smds in Top:  %d\n\
+    Smds in Bot:  %d\n\
+ Number of holes: %d\n\
+ Total number of drills: %d", i, k, j+l, j, l, h, i+k+h);
+
+ dlgDialog("Layout Information") {
+  dlgVBoxLayout {
+    dlgHBoxLayout {
+      dlgSpacing(200);}
+     dlgTextView(result);
+         dlgPushButton("+Ok") dlgAccept();
+  }
+ };
+
+ string fileName ;
+
+ fileName = dlgFileSave("Save Statistic File", filesetext(B.name, ".txt"), "*.txt");
+   if (fileName == "") exit(0);
+
+  output(fileName) {
+    printf("%s",result);
+    }
+ }
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Board    \n");
+   exit (0);
+ }

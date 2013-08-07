@@ -1,0 +1,89 @@
+#usage "<nobr>This ULP generates a script to clear layer(s) in library.<p>"
+       "run clear-layer-in-lbr.ulp [YES] <b>layer</b> [layer] [layer] ....<br>"
+       "YES = clear without confirmation.<br>"
+       "Clear only layer in packages</nobr>"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// Version 1.01 -- 2008-04-10 changed GROUP ... (>x y); alf@cadsoft.de
+
+// ---------- parameter section -------------------------------------
+
+string clrscript = "~clear~.scr";
+string scriptfile;
+
+int    layer_visible[];
+int    clear_layer[];
+
+int    cnt = 1;
+int    clear_outo = 0;
+string s;
+
+
+// **** main ****
+if (library) {
+  string cmd;
+  if (argc < 2) {
+    dlgMessageBox("<nobr>Start this ulp from command line with parameter</nobr><p>Usage:<br>" + usage, "OK");
+    exit(0);
+  }
+  if (argv[1] == "YES") { cnt = 2; clear_outo = 1; }
+  for (int n = cnt; n <= argc; n++) {
+    clear_layer[n] = strtol(argv[n]);
+    cmd += argv[n] + "\n";
+  }
+
+  library(L) {
+    L.layers(LY) {
+      layer_visible[LY.number] = LY.visible;
+    }
+    scriptfile = filedir(L.name) + clrscript;
+    output(scriptfile, "wtD") {
+      printf("GRID MM FINEST;\nDISPLAY NONE ");
+      for (int n = cnt; n < argc; n++) {
+        printf(" %d", clear_layer[n]);
+        if (clear_layer[n] == 21) {
+          printf(" -23 -25 -27 -51");
+        }
+        if (clear_layer[n] == 22) {
+          printf(" -24 -26 -28 -52");
+        }
+      }
+      printf(";\n");
+
+      L.packages(P) {
+                        // extended with .PAC  ## 22.03.2005 support@cadsoft.de
+        sprintf(s, "Edit %s.PAC;\nCHANGE LAYER %d;\nRECT (%.4f %.4f)(%.4f %.4f);\nGROUP (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (>%.4f %.4f);\nDELETE (>%.4f %.4f);\n",
+                    P.name,
+                    clear_layer[cnt],
+                    u2mm(P.area.x1)/2, u2mm(P.area.y1)/2,
+                    u2mm(P.area.x2)/2, u2mm(P.area.y2)/2,
+                    u2mm(P.area.x1), u2mm(P.area.y1),
+                    u2mm(P.area.x2), u2mm(P.area.y1),
+                    u2mm(P.area.x2), u2mm(P.area.y2),
+                    u2mm(P.area.x1), u2mm(P.area.y2),
+                    u2mm(P.area.x1), u2mm(P.area.y1),
+                    u2mm(P.area.x1), u2mm(P.area.y1) );
+        if (clear_outo) {
+          printf("%s", s);
+        }
+        else {
+          if (dlgMessageBox("clear layer(s) in package:\n" + P.name, "Yes", "+No") == 0) {
+            printf("%s", s);
+          }
+        }
+      }
+      printf("grid last;\n");
+      printf("DISPLAY NONE ");
+      for (int l = 255; l ; l--) {
+        if (l == 99) l = 89;  // *** no Symbol Layer ***
+        if (layer_visible[l]) printf(" %d", l);
+      }
+    }
+  }
+  exit("SCRIPT '" + scriptfile + "';");
+}
+
+
+dlgMessageBox("Start this ULP from a Library", "OK");
+exit(0);

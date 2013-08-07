@@ -1,0 +1,44 @@
+#usage "<b>Delete devices</b>\n"
+       "<p>"
+       "To delete a number of devices, run this ULP and "
+       "edit the commands in the appearing editor window."
+       "<p>"
+       "The remaining DELETE commands are executed after the "
+       "EXECUTE button has been clicked."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+
+if (library) {
+string cmd = "", h;
+
+cmd += "set undo_log off;\n";
+library(L) {
+  L.devicesets(D) {
+    h = "";
+    sprintf(h,"REMOVE %s.dev;\n",D.name);
+    cmd += h;
+    }
+  }
+cmd += "set undo_log on;\n";
+
+//  EditBox
+int Result = dlgDialog("Edit and Execute") {
+    dlgTextEdit(cmd);
+    dlgHBoxLayout {
+       dlgPushButton("+Execute") dlgAccept();
+       dlgPushButton("-Cancel") dlgReject();
+       }
+    };
+if (!Result)
+   exit(0);
+
+exit(cmd);
+}
+
+else {
+   dlgMessageBox("\n   Start this ULP in a Library   \n");
+   exit (0);
+}

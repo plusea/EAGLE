@@ -1,0 +1,43 @@
+[CAM Processor Job]
+Description[de]="<b>Erzeugt Encapsulated-PostScript-Format (EPS)</b><p>\nBeispiel für cam2printer.ulp<p>\nDieser CAM-Job besteht aus zwei Schritten, die Daten<br>\n für eine zweilagige Platine erzeugen.<br>"
+Description[en]="<b>Generates EPS Format</b><p>\nExample for cam2printer.ulp<p>\nThis CAM job consists of two sections that generate<br>\ndata for a two layer board.<br>"
+Section=Sec_1
+Section=Sec_2
+
+[Sec_1]
+Name[de]="Bestückungsseite"
+Name[en]="Component side"
+Prompt[de]=""
+Device="EPS"
+Wheel=".whl"
+Rack=""
+Scale=1
+Output="%N.cmp"
+Flags="0 0 0 1 0 1 0"
+Emulate="0 0 0"
+Offset="0.0mil 0.0mil"
+Sheet=1
+Tolerance="0.01 0.01 0.01 0.01 0 0"
+Pen="0.0mil 0"
+Page="100000.0mil 100000.0mil"
+Layers=" 1 17 18 20"
+Colors=" 1 2 1 2 1 2 1 2 1 2 1 2 1 2 1 2 6 6 4 8 8 8 8 8 8 8 8 8 8 8 8 8 4 4 1 1 1 1 3 3 1 2 6 8 8 5 8 8 8 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 4 2 4 3 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0"
+
+[Sec_2]
+Name[de]="Lötseite"
+Name[en]="Solder side"
+Prompt[de]=""
+Device="EPS"
+Wheel=".whl"
+Rack=""
+Scale=1
+Output="%N.sol"
+Flags="0 0 0 0 0 0 0"
+Emulate="0 0 0"
+Offset="0.0mil 0.0mil"
+Sheet=1
+Tolerance="0.01 0.01 0.01 0.01 0 0"
+Pen="0.0mil 0"
+Page="100000.0mil 100000.0mil"
+Layers=" 16 17 18 20"
+Colors=" 1 2 1 2 1 2 1 2 1 2 1 2 1 2 1 2 6 6 4 8 8 8 8 8 8 8 8 8 8 8 8 8 4 4 1 1 1 1 3 3 1 2 6 8 8 5 8 8 8 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 4 2 4 3 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0"

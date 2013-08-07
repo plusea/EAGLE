@@ -1,0 +1,1689 @@
+#usage "<b>Export milling data for a board layout</b>\n"
+       "<br>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+// 08.05.2002 alf@cadsoft.de    - reverse milling
+// 23.06.2002 alf@cadsoft.de    - Polygon:CHANGE THERMAL OFF
+// 14.05.2003 alf@cadsoft.de    - With REFERENCE-Drill to mirror for drilling machine
+//                              - Switch On/Off 2. isolate/cupper pouring
+// 02.09.2003                   - Switch On/Off drills
+// 24.04.2004 alf@cadsoft.de    - String ulp_path no longer necessary
+// 26.07.2006 alf@cadsoft.de    - Generate separatet layer +100 +101 +102 for milling tools
+//                              - check Polygons of Rank 6
+//                              - Use Rank 1 of polygon to generate real outline contour
+//                                to milling out from holder
+//                              - Correct Rank on all generated Polygons
+// 01.08.2006 alf@cadsoft.de    - Check if POLYGON placed. If Yes, check if CLASS-Clearance 0.005mm > Tool#1
+//                                but if problem with routet WIRE out of 0 45 90 Degree.
+//                                Es kann vorkommen, dass durch math. Rundung der Koordinaten das Polygon
+//                                nicht in die Isolationskanäle fliessen kann.
+// 21.09.2007 alf@cadsoft.de    - Berichtigung von großen Bohrungen in Packages
+// 08.10.2007 alf@cadsoft.de    - Fräserbreiten ab 5 micron zulassen wg. Laser
+// 05.05.2008 alf@cadsoft.de    - Delete von Polygon mit SHIFT und Via mit Ripup
+
+#require 4.16000
+
+string Version = "Outlines generator for PCB milling. ULP-Version 4.1.1";
+
+/*
+   Complete the following steps to add a new output device definition:
+
+   1. Add a new member to the 'enum { devScript = 1, ...'
+   2. Add the new (unique!) device name to 'DeviceNames[]'
+   3. Add the necessary 'case dev...' branches to
+                 'DeviceInit()',
+                 'DeviceReInit()',
+                 'DeviceDraw()',
+                 'CircleDraw()',
+                 'ArcDraw()'
+             and 'DeviceEnd()'
+
+   4. Add also new Tool values to
+                 'toolFiles()'
+             and 'ValueInit()'
+*/
+
+string DRCinfo = "<qt><b>Distance info:</b><br>Distance Copper/Dimension (see <b>DRC</b>) this is the distance between <br>"
+                 "the polygon and outline of the board. If the value for 'Copper/Dimension' <br>"
+                 "in the DRC settings is set higher than the radius of the mill tool#2, the <br>"
+                 "board dimensions will be milled larger by the difference of these two <br>"
+                 "respective values. For the best result, make sure the value for <br>"
+                 "<b>Copper/Dimension</b> in <b>DRC Distance</b> is set on <b>0.01 mm</b>, or use the <br>"
+                 "same value in the Design Rule's settings as the radius of the milling tool#2 <br>"
+                 "is, before running this ULP!<p>"
+                 "Press button <b>Reference</b> to generate a reference Package to place<br>"
+                 "refernece holes on PCB for exact mirroring the bottom side of PCB on milling machine.<br>"
+                 "</qt>";
+
+string infoREFERENCE = "<nobr>Generate a special package with<br>" +
+                       "REFERENCE circles in Layer Holes.<br>" +
+                       "Place it in the layout for milling and <br>" +
+                       "mirroring (bottom side) with offset and <br>" +
+                       "start this ULP again.<br>";
+                       "The position of the circles are defined<br>" +
+                       "in the NC drill data file which comes<br>" +
+                       "from the NC machine (eg. Excellon).</nobr><p>";
+
+
+//
+// The various output devices
+//
+
+int defaultdevice =  2;   // set default device
+int SelectedDevice = 0;
+string Device;
+
+enum { devScript = 1, devHPGL };
+
+string DeviceNames[]  = { "Select a device", "SCRIPT",    "HPGL" };
+string DeviceExt[]    = { ".$$$"           , ".scr",      ".plt" };
+string DrillExt[]     = { ".$$$"           , "_drl.scr" , ""     };
+string DefaultSuffix  = DeviceExt[0];
+string DrlDefaultSuffix = DrillExt[0];
+string DrillLabel     = "D&rill file";
+string DrBrowse       = "Bro&wse";
+
+
+
+//
+// Parmameters
+//
+
+// *** The milling tool diameter ***
+real MillToolOutl = 0.2;
+real MillToolIsolate = 0.0;      //
+int  OverlapOutlPercent = 20;    // percent, to avoid fine copper lines while milling out the area
+real MillToolFree = 0.8;         // Blow up & free pouring
+int  millfreeyes  = 1;           // free pouring on/off
+int  OverlapRubOut = 20;    // percent, to avoid fine copper lines while milling out the area
+real DrillPad     = 0.8;
+real DrillVia     = 0.8;
+real DrillHole    = 0.8;
+int  onlydrill    = 0;           // output only drill on HPGL
+int  generatedrills = 1;         // aktivate drills only in one export file
+                                 // while drills crashed in 2. run.
+real DimensionMillTool = 2.0;    // milling board outline from holder
+
+real Distance_Copper_Dimension = 1.016;  // default value
+real Holder_Spacing = 10.0;      // in mm, the distance to make a holder spacing for outline miling.
+
+// The HPGL PEN list
+enum { PadDrill = 1, ViaDrill, Contour, BlowUp_RubOut, HoleDrill, DimensionLine }  // HPGL Pen select "SP.."
+string PenList[];
+PenList[PadDrill]      = "PadDrill";
+PenList[ViaDrill]      = "ViaDrill";
+PenList[Contour]       = "Contour";
+PenList[BlowUp_RubOut] = "Blow-Up/Rub-Out";
+//PenList[RubOut]        = "Rub-Out";
+PenList[HoleDrill]     = "HoleDrill";
+PenList[DimensionLine] = "DimensionLine";
+
+string sToolValue[];               // Tool diameter as String
+
+enum { HPGLsolution = 1016 }       // Inch/1016 = 0.025 mm
+
+real   Mirror           = 1.0;
+string ref_pac          = "_REFERENCE_HOLE_"; // special package for mirror milling data
+int    mirr_offsetx     = 0;
+int    ref_null_offsetX = 0;
+int    ref_null_offsetY = 0;
+int    ref_offsetX[];
+int    ref_offsetY[];
+int    ref_cnto = 0;
+
+
+int    Layer = 0;
+string fillstyle = "Interleave";   // 9 Interleave
+string lOutl;          // 1. milling tool
+string lOutl1;         // 2. milling tool  26.07.2006
+string lOutl2;         // 3. milling tool
+string trueOutline_coordinate;     // the generatet polygon outlines for the milling polygon
+
+string OutlinesSignalName = "_OUTLINES_";     // reserved Signal name for special polygon
+string OutlineMillSignal  = "$_OUTLINEMILL_$";
+string PassDimensionPoly  = "PASSDIMESION";   // the true output  line defined by Layer 20 Dimension
+string Pass2       = "PASS_2";
+string PassPour    = "PASS_POUR";
+string PassOutmill = "PASS_OUTLINE";
+string InPassDimensionPoly;
+string InPass2;
+string InPassPour;
+string InPassOutmill;
+int menu = 0;
+
+string showpic[];
+string info;
+string infotext;
+string path;
+string File, FileName;
+string DrFile, DrillFile;
+
+
+int test = 0;
+
+// *** Functions ***
+void viewtest(string txt) {
+   dlgDialog("test") {
+      dlgHBoxLayout {
+         dlgTextEdit(txt);
+         dlgVBoxLayout dlgSpacing(150);
+      }
+      dlgHBoxLayout {
+         dlgPushButton("OK") dlgAccept();
+         dlgPushButton("Cancel") { dlgReject(); exit(0); }
+         dlgSpacing(400);
+      }
+   };
+   return;
+}
+
+void Warning(string Message, string Details) {
+  dlgMessageBox("<b>Warning:&nbsp;" + Message + "</b> " + Details, "OK");
+  return;
+}
+
+void Fatal(string Message, string Details) {
+  dlgMessageBox("<b>ERROR: " + Message + "</b><hr><p>\n" + Details);
+  exit(1);
+}
+
+void Error(string Message, string Details) {
+  dlgMessageBox("<b>ERROR: " + Message + "</b><p>\n" + Details);
+}
+
+if (!board) Fatal("No board!", "This program can only work in the board editor.");
+
+void dirtest(void) {
+  string a[];
+  int n = fileglob(a, "*.*");
+  if (n) {
+    dlgMessageBox("Working directory:\n" + filedir(a[0]), "OK");
+  }
+  return;
+}
+
+string vunit(int val, int unit) {
+  string s;
+  if (unit) sprintf(s, "%.4f", u2mm(val));
+  else sprintf(s, "%.6f",u2inch(val));
+  return s;
+}
+
+
+string getval(string line, real exf, real refholediameter) {
+  int Y = strchr(line, 'Y');
+  string s;
+  sprintf(s, "(%.4f %.4f) (%.4f %.4f);\n",
+                       strtol(strsub(line, 1)) * exf,
+                       strtol(strsub(line, Y+1)) * exf,
+                       strtol(strsub(line, 1)) * exf + refholediameter/2 * exf,
+                       strtol(strsub(line,Y+1)) * exf );
+  return s;
+}
+
+void setZerroReference(void) {
+  int  refunit = 0;
+  int  format  = 0;
+  string ReferenceUnit[] = { "INCH", "MM", "INCH", "MM" };
+  real   exf[]        = { 0.001, 0.0001, 0.001, 0.0001 };
+            // Drillformat 2.3    2.4    2.3     2.4
+            // Unit        Inch   Inch    MM     MM
+  real refhdiameter[] = { 118,   1180,   3000,  30000 };
+
+  int Result = dlgDialog(filename(argv[0]) + " - generate refernece and place on Board") {
+    dlgLabel(showpic[17]);
+    dlgLabel(infoREFERENCE);
+    dlgHBoxLayout {
+      dlgGroup("Unit") {
+        dlgHBoxLayout {
+          dlgRadioButton("INCH", refunit);
+          dlgRadioButton("MM", refunit);
+          dlgStretch(1);
+        }
+      }
+      dlgStretch(1);
+    }
+    dlgGroup("Format") {
+      dlgHBoxLayout {
+        dlgRadioButton("2.3", format);
+        dlgRadioButton("2.4", format);
+        dlgStretch(1);
+      }
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgStretch(1);
+      dlgPushButton("-Cancel") dlgReject();
+    }
+  };
+  if (Result) {
+    board(B) {
+      string usedlibraries = "USE -*;\n";
+      int u = 0;
+      do {
+        if (used_libraries[u]) {
+          usedlibraries += "USE '" + used_libraries[u] + "';\n";
+          u++;
+        }
+      } while(used_libraries[u]);
+      string used_scr = filedir(B.name) + "used-lbrs-" + filesetext(filename(B.name), ".scr");
+      output(used_scr, "wt") {
+        printf("%s", usedlibraries);
+      }
+      dlgMessageBox("<nobr>After reference package placing start the<br>" +
+                     used_scr +
+                    "<br>to set the used libraries back.", "OK");
+      string cmd;
+      string ref[];
+      string reference_file = dlgFileOpen("Select drill reference file (Holes)", "", "*.ncd\n*.*");
+      if (!reference_file) return;
+      int unit_format = refunit * 2 + format;
+
+      int    l;
+      l = fileread(ref, reference_file);
+      string lbrname;
+      lbrname = filesetext(B.name, "$$$ref_tmp.lbr");
+      sprintf( cmd, "OPEN '%s';\n", lbrname );
+      cmd += "Edit '" + ref_pac + ".PAC';\nCHANGE LAYER 45;\nGRID " + ReferenceUnit[refunit] + ";\n";
+      for (int n = 0; n <= l; n++) {
+        string s = ref[n];
+        if(s[0] == 'X') cmd += "CIRCLE 0 " + getval(ref[n], exf[unit_format], refhdiameter[unit_format]);
+      }
+      cmd += "WRITE;\n";
+      cmd += "EDIT '" + B.name + "';\n";
+      cmd += "DISPLAY 45;\n";
+      cmd += "GRID " + ReferenceUnit[refunit] + ";\n";
+      cmd += "WIN FIT; WIN (" +
+              vunit((B.area.x1 + B.area.x2 )/2, refunit) + " "   +
+              vunit((B.area.y1 + B.area.y2 )/2, refunit) + ") (" +
+              vunit((B.area.x1 + B.area.x2 )/2 + 1000, refunit) + " "   +
+              vunit((B.area.y1 + B.area.y2 )/2 + 1000, refunit) + ") (" +
+              vunit((B.area.x1 + B.area.x2 )/2 + 150 , refunit) + " "   +
+              vunit((B.area.y1 + B.area.y2 )/2 + 150 , refunit) + ");\n",
+      cmd += "USE -*; USE '" + lbrname + "';\n";
+      cmd += "ADD " + ref_pac + "\n";
+      if (test) viewtest(cmd);
+      exit(cmd);
+    }
+  }
+  return;
+}
+
+
+// *** Tools in EXCELLON and GERBER (mm)
+void toolFiles(void) {
+  board(B) {
+    output(filesetext(B.name, ".rac")) {
+      printf("T01  %.1f mm\n", DrillPad);
+      printf("T02  %.1f mm\n", DrillVia);
+      printf("T03  %.1f mm\n", MillToolOutl);
+      printf("T04  %.1f mm\n", MillToolFree);
+      printf("T05  %.1f mm\n", DrillHole);
+      printf("T06  %.1f mm\n", DimensionMillTool);
+    }
+    output(filesetext(B.name, ".whl")) {
+      printf(";aperture wheel file generated by %s %s\n", EAGLE_SIGNATURE, filename(argv[0]) );
+      printf(";remove the above line to prevent this file from being overwritten!\n");
+      printf("D11      round    %6.4fmm\n", DrillPad);
+      printf("D12      round    %6.4fmm\n", DrillVia);
+      printf("D13      round    %6.4fmm\n", MillToolOutl);
+      printf("D14      round    %6.4fmm\n", MillToolFree);
+      printf("D15      round    %6.4fmm\n", DrillHole);
+      printf("D16      round    %6.4fmm\n", DimensionMillTool);
+    }
+  }
+  return;
+}
+
+void showRackFile(void) {
+  board(B) {
+    string text;
+    int nChars = fileread(text, filesetext(B.name, ".rac"));
+    dlgDialog("Show rack file") {
+      dlgTextView(text);
+      dlgHBoxLayout {
+        dlgPushButton("+&OK") dlgAccept();
+        dlgStretch(1);
+      }
+    };
+  }
+  return;
+}
+
+void showHPGLinfo(void) {
+  string text;
+  int nChars = fileread(text, filesetext(FileName, ".pli"));
+  dlgDialog("Show plot info") {
+    dlgTextView(text);
+    dlgHBoxLayout {
+      dlgPushButton("+&OK") dlgAccept();
+      dlgStretch(1);
+      dlgSpacing(200);
+   }
+  };
+  return;
+}
+
+void ValueInit(void) {
+  sprintf( sToolValue[PadDrill], "%.2f", DrillPad);
+  sprintf( sToolValue[ViaDrill], "%.2f", DrillVia);
+  sprintf( sToolValue[Contour], "%.2f", MillToolOutl);
+  sprintf( sToolValue[BlowUp_RubOut], "%.2f", MillToolFree);
+  sprintf( sToolValue[HoleDrill], "%.2f", DrillHole);
+  sprintf( sToolValue[DimensionLine], "%.2f", DimensionMillTool);
+  return;
+}
+
+
+void  startlineprint( int x1, int y1, int x2, int y2) {
+  printf("\nPA%.0f,%.0f;PD;\nPA%.0f,%.0f;", Mirror * u2inch(x1 + mirr_offsetx)*HPGLsolution, u2inch(y1 + ref_null_offsetY)*HPGLsolution, Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution);
+  return;
+}
+
+void nextlineprint( int x2, int y2) {
+  printf("\nPA%.0f,%.0f;", Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution );
+  return;
+}
+
+void endlineprint( int x2, int y2) {
+  printf("\nPA%.0f,%.0f;PU;", Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution);
+  return;
+}
+
+void fullineprint( int x1, int y1, int x2, int y2) {
+  printf("\nPA%.0f,%.0f;PD;\nPA%.0f,%.0f;PU;", Mirror * u2inch(x1 + mirr_offsetx)*HPGLsolution, u2inch(y1 + ref_null_offsetY)*HPGLsolution, Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution );
+  return;
+}
+
+real WireLength(real x1,real x2,real y1,real y2) {
+  real WL = sqrt(pow(x2-x1,2) + pow(y2-y1,2));  // calculate Wire length WL
+  return WL;
+}
+
+// if the wire longer as longdistance and vertical or horizontal
+// then make a holder spacing
+void  checkBridge(int x1, int y1, int x2, int y2, int state) {
+  real WL = WireLength(u2mm(x2),u2mm(x1),u2mm(y2),u2mm(y1));
+
+  if (WL >= Holder_Spacing && (x1 == x2 || y1 == y2) ) {
+    int bridgewidth = DimensionMillTool * 10000;
+    int xa, xb, ya, yb;
+    switch (state) {
+      case 0:
+              startlineprint(x1, y1, x2, y2);
+              break;
+      case 1:
+              if (x2 > x1 && x2 >= 0) {
+                xa = x2 - (2.5 * bridgewidth);
+                xb = x2 - bridgewidth;
+              }
+              if (x2 < x1 && x2 >= 0) {
+                xa = x2 + (2.5 * bridgewidth);
+                xb = x2 + bridgewidth;
+              }
+              if (x2 > x1 && x2 < 0) {
+                xa = x2 - (2.5 * bridgewidth);
+                xb = x2 - bridgewidth;
+              }
+              if (x2 < x1 && x2 < 0) {
+                xa = x2 + (2.5 * bridgewidth);
+                xb = x2 + bridgewidth;
+              }
+              if (y2 > y1 && y2 >= 0 ) {
+                ya = y2 - (2.5 * bridgewidth);
+                yb = y2 - bridgewidth;
+              }
+              if (y2 < y1 && y2 >= 0) {
+                ya = y2 + (2.5 * bridgewidth);
+                yb = y2 + bridgewidth;
+              }
+              if (y2 > y1 && y2 < 0 ) {
+                ya = y2 - (2.5 * bridgewidth);
+                yb = y2 - bridgewidth;
+              }
+              if (y2 < y1 && y2 < 0) {
+                ya = y2 + (2.5 * bridgewidth);
+                yb = y2 + bridgewidth;
+              }
+              if (x1 == x2) {
+                endlineprint(x1, ya);
+                startlineprint(x1, yb, x1, y2);
+              }
+              else {
+                endlineprint(xa, y1);
+                startlineprint(xb, y1, x2, y2);
+              }
+              break;
+
+      case 2:
+              endlineprint(x2, y2);
+              break;
+    }
+    return;
+  }
+  else {
+    switch (state) {
+      case 0:
+              startlineprint(x1, y1, x2, y2);
+              break;
+      case 1:
+              nextlineprint(x2, y2);
+              break;
+      case 2:
+              endlineprint(x2, y2);
+              break;
+    }
+  return;
+  }
+}
+
+void DeviceDraw(int x1, int y1, int x2, int y2, int state) {
+  // Actually draw a line on the output device.
+  // 'state' is defined as
+  // 0 = this is the first line of a partial polygon
+  // 1 = this is a "normal" line (neither the first nor the last one)
+  // 2 = this is the last line of a partial polygon
+  // 3 = this is a drill coordinate
+  // 4 = this is one line
+  switch (SelectedDevice) {
+    case devScript:
+      switch (state) {
+        case 0:
+                printf("WIRE (%.4f %.4f) (%.4f %.4f)\n", Mirror * u2mm(x1 + mirr_offsetx), u2mm(y1 + ref_null_offsetY), Mirror * u2mm(x2 + mirr_offsetx) , u2mm(y2 + ref_null_offsetY));
+                break;
+        case 1:
+                printf("(%.4f %.4f)\n", Mirror * u2mm(x2 + mirr_offsetx), u2mm(y2 + ref_null_offsetY));
+                break;
+        case 2:
+                printf("(%.4f %.4f);\n", Mirror * u2mm(x2 + mirr_offsetx), u2mm(y2 + ref_null_offsetY));
+                break;
+        case 3:
+                printf("HOLE (%.4f %.4f);\n", Mirror * u2mm(x2 + mirr_offsetx), u2mm(y2 + ref_null_offsetY));
+                break;
+        case 4:
+                printf("WIRE (%.4f %.4f) (%.4f %.4f)\n", Mirror * u2mm(x1 + mirr_offsetx), u2mm(y1 + ref_null_offsetY), Mirror * u2mm(x2 + mirr_offsetx), u2mm(y2 + ref_null_offsetY));
+                break;
+      }
+      break;
+    case devHPGL:
+      switch (state) {
+        case 0:
+                if (InPassOutmill) checkBridge(x1, y1, x2, y2, state);
+                else startlineprint(x1, y1, x2, y2);
+                break;
+        case 1:
+                if (InPassOutmill) checkBridge(x1, y1, x2, y2, state);
+                else nextlineprint(x2, y2);
+                break;
+        case 2:
+                if (InPassOutmill) checkBridge(x1, y1, x2, y2, state);
+                else endlineprint(x2, y2);
+                break;
+        case 3:      // drilling tool
+                printf("\nPA%.0f,%.0f;PD;", Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution);
+                printf("\nPA%.0f,%.0f;PU;", Mirror * u2inch(x2 + mirr_offsetx)*HPGLsolution, u2inch(y2 + ref_null_offsetY)*HPGLsolution);
+                break;
+        case 4:      // polygon filling
+                fullineprint(x1, y1, x2, y2);
+                break;
+    }
+    break;
+  }
+  return;
+}
+
+void CircleDraw(int centerx, int centery, int diam, int drilltool) {
+  switch (SelectedDevice) {
+    case devScript:
+                    printf("CHANGE WIDTH %.4f;\n", DrillHole);
+                    printf("CIRCLE (%.4f %.4f) (%.4f %.4f);\n", Mirror * u2mm(centerx + mirr_offsetx), u2mm(centery + ref_null_offsetY), Mirror * u2mm((centerx + diam / 2 - drilltool/2)  + mirr_offsetx), u2mm(centery + ref_null_offsetY));
+                    break;
+    case devHPGL:
+                    // for HPGL 1. Start point arc,
+                    //          2. Center point arc
+                    //          3. angel
+                    printf("\nPA%.0f,%.0f;PD;", Mirror * (u2inch((centerx + diam / 2 - drilltool / 2) + mirr_offsetx)) * HPGLsolution, u2inch(centery + ref_null_offsetY) * HPGLsolution);
+                    printf("\nAA%.0f,%.0f,360;PU;", Mirror * u2inch(centerx + mirr_offsetx) * HPGLsolution, u2inch(centery + ref_null_offsetY) * HPGLsolution );
+                    break;
+  }
+  return;
+}
+
+/*
+void ArcDraw(int startarcx, int startarcy, int endarcx, int endarcy, int centerarcx, int centerarcy, real angle) {
+  switch (SelectedDevice) {
+    case devScript:
+                    int rx = 2 * (startarcx - centerarcx);
+                    int ry = 2 * (startarcy - centerarcy);
+                    if (Mirror == 1) printf("ARC CCW ");
+                    else printf("ARC CW ");
+                    printf("(%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\n",
+                            Mirror * u2mm(startarcx + mirr_offsetx), u2mm(startarcy + ref_null_offsetY),
+                            Mirror * u2mm(startarcx - rx + mirr_offsetx), u2mm(startarcy - ry + ref_null_offsetY),
+                            Mirror * u2mm(endarcx + mirr_offsetx), u2mm(endarcy + ref_null_offsetY) );
+                    break;
+    case devHPGL:
+                    printf("\nPA%.0f,%.0f;PD;", Mirror * u2inch(startarcx + mirr_offsetx)*HPGLsolution, u2inch(startarcy + ref_null_offsetY)*HPGLsolution);
+                    printf("\nAA%.0f,%.0f,%.2f;PU;", Mirror * u2inch(centerarcx + mirr_offsetx)*HPGLsolution, u2inch(centerarcy + ref_null_offsetY)*HPGLsolution, Mirror * angle);
+                    break;
+  }
+  return;
+}
+*/
+
+void scriptHeader(void) {
+  printf("GRID mm;\n");
+  printf("SET OPTIMIZING OFF;\nSET UNDO_LOG OFF;\nSET WIRE_BEND 2;\n");
+  printf("LAYER %d %s;\nSET FILL_LAYER %d %s;\n",
+          Layer + 100, lOutl, Layer + 100, fillstyle);
+  // 26.07.2006
+  printf("LAYER %d %s;\nSET FILL_LAYER %d %s;\n",
+          Layer + 101, lOutl1, Layer + 101, fillstyle);
+  printf("LAYER %d %s;\nSET FILL_LAYER %d %s;\n",
+          Layer + 102, lOutl2, Layer + 102, fillstyle);
+  printf("CHANGE LAYER %d;\n", Layer + 100 );
+  return;
+}
+
+
+void DeviceInit(int tool) {
+  // Do anything necessary to initialize the output device
+  switch (SelectedDevice) {
+    case devScript:
+                    // TODO make the layer user definable?
+                    if (InPassPour) {
+                      real overlap = MillToolFree * OverlapOutlPercent / 100;
+                      printf("CHANGE WIDTH %.4f;\n", MillToolFree);
+                      printf("SET FILL_LAYER %d %s;\n", Layer + 100, fillstyle);
+                      printf("CHANGE LAYER %d;\n", Layer + 101);  // 26.07.2006
+                    }
+                    break;
+    case devHPGL:
+                    output(filesetext(FileName,".pli"), "at") {
+                      // printf("Pen #%d = %s mm\t%s\n", tool, sToolValue[tool], PenList[tool]);
+                    }
+                    if (tool = Contour) {
+                      printf ("IN; IP 0,0,100,100;SC 0,100,0,100;");
+                    }
+                    break;
+  }
+  return;
+}
+
+
+void DeviceReInit(int tool) {
+  // Do anything necessary the secondary initialize the output device
+  switch (SelectedDevice) {
+    case devScript:
+                    // TODO make the layer user definable?
+                    switch (tool) {
+                      case PadDrill:
+                                          printf("\nCHANGE DRILL %.2f;\n", DrillPad);
+                                          break;
+                      case ViaDrill:
+                                          printf("\nCHANGE DRILL %.2f;\n", DrillVia);
+                                          break;
+                      case HoleDrill:
+                                          printf("\nCHANGE DRILL %.2f;\n", DrillHole );
+                                          break;
+                      case Contour:
+                                          printf("\nCHANGE WIDTH %.4f;\n", MillToolOutl);
+                                          break;
+                      case BlowUp_RubOut:
+                                          printf("\nCHANGE WIDTH %.4f;\n", MillToolFree);
+                                          printf("\nchange layer %d;\n", Layer+101);     // 26.07.2006
+                                          break;
+                      case DimensionLine:
+                                          printf("\nCHANGE WIDTH %.4f;\n", DimensionMillTool);
+                                          printf("\nCHANGE LAYER %d;\n", Layer+102);     // 26.07.2006
+                                          break;
+                      default:
+                                          break;
+                    }
+                    break;
+      case devHPGL:
+                    printf ("\nPU;\nSP%d;\nPA0,0;", tool); // pen select
+                    if(test) printf(" # %s", PenList[tool]);
+                    output(filesetext(FileName,".pli"), "at") {
+                      if (onlydrill && tool == Contour);
+                      printf("Pen #%d = %s mm\t%s\n", tool, sToolValue[tool], PenList[tool]);
+                    }
+                    break;
+  }
+  return;
+}
+
+
+void DeviceEnd(void) {
+  // Do anything necessary to end output to the device
+  switch (SelectedDevice) {
+    case devScript:
+                    break;
+    case devHPGL:
+                    printf("\nPU;\nSP0;");
+                    break;
+   }
+  return;
+}
+
+
+// TRUE OUTLINE ***
+void trueOutlineDraw(string SignalName) {
+  board(B) {
+    B.signals(S) {
+      if (S.name == SignalName) {
+        S.polygons(P) {
+          int x1 = INT_MAX, y1 = INT_MAX, x2 = INT_MIN, y2 = INT_MIN;
+          int x0, y0, first = 1;
+          int FrameWire;
+          string s;
+
+          P.wires(W) {
+            x1 = min(x1, W.x1);
+            x2 = max(x2, W.x1);
+            y1 = min(y1, W.y1);
+            y2 = max(y2, W.y1);
+          }
+          string lasts;
+          P.contours(W) {
+            if (first) {
+              // a new partial polygon is starting
+              x0 = W.x1;
+              y0 = W.y1;
+              FrameWire = (x1 == x0 || x2 == x0) && (y1 == y0 || y2 == y0);
+              sprintf(s, " (%.4f %.4f)", u2mm(W.x1), u2mm(W.y1) );
+              trueOutline_coordinate = s;
+              lasts = s;
+              first = 0;
+            }
+            else if (W.x2 == x0 && W.y2 == y0) {
+              // this was the last wire of the partial polygon,
+              // so the next wire (if any) will be the first wire
+              // of the next partial polygon
+              sprintf(s, " (%.4f %.4f)", u2mm(W.x2), u2mm(W.y2) );
+              if (lasts != s) trueOutline_coordinate += s;
+              lasts = s;
+              first = 1;
+            }
+            else ;
+            if (!FrameWire) {
+              sprintf(s, " (%.4f %.4f)", u2mm(W.x2), u2mm(W.y2) );
+              if (lasts != s) trueOutline_coordinate += s;
+              lasts = s;
+            }
+          }
+        }
+      }
+    }
+    return ;
+  }
+}
+
+
+// *** the return string to start rekursiv ***
+string RUN_pass(string run_Pass) {
+  string s;
+  sprintf(s, "RUN '%s' '%s' '%.4f' '%.4f' '%.4f' '%d' '%s' '%s' '%s' '%.1f' '%.2f' '%.2f' '%.2f' '%d' '%d' '%.2f' '%.4f' '%d' '%.4f' '%d' '%d' '%s';\n",
+             argv[0], Device, MillToolOutl, MillToolIsolate, MillToolFree, Layer, FileName, DrillFile, run_Pass,
+             Mirror, DrillPad, DrillVia, DrillHole, OverlapOutlPercent, OverlapRubOut, Distance_Copper_Dimension,
+             DimensionMillTool, millfreeyes, Holder_Spacing, onlydrill, generatedrills, trueOutline_coordinate);
+  return s;
+}
+
+
+
+// place a VIA outside the board with the same signal name
+// for used polygon to calculate the filling with orpahns off
+// and get no more polygon contours
+void generateTruePolygonOutlines() { // the true outlines of board
+  board(B) {
+    real x1 = u2mm(B.area.x1) - DimensionMillTool, y1 = u2mm(B.area.y1) - DimensionMillTool,
+         x2 = u2mm(B.area.x2) + DimensionMillTool, y2 = u2mm(B.area.y2) + DimensionMillTool;
+    real distanceDimension = (DimensionMillTool / 2 - Distance_Copper_Dimension) * 2;
+    if (distanceDimension < 0) distanceDimension = 0.001;
+    string Cmd;
+    sprintf(Cmd, "GRID mm FINEST;\n"
+                 "CHANGE DRILL 0.3;\nCHANGE DIAMETER 0.5;\nCHANGE SHAPE ROUND;\n"
+                 "SET POLYGON_RATSNEST ON;\n"
+                 "SET WIRE_BEND 0;\n"
+                 "CHANGE RANK 1;\n"           // 26.07.2006  to generate the true outline of dimension
+                 "CHANGE POUR SOLID;\n"
+                 "CHANGE THERMAL OFF;\n"
+                 "CHANGE LAYER %d;\n"
+                 "DISPLAY NONE 17 %d;\n",
+                  Layer, Layer);
+    // make the 1st virtual Net for Normal Polygon Orphens OFF
+    // to generate the true outline for place the spacial polygon
+    // make a partial WIA for generate Polygon with orphans off
+    string millout;
+    sprintf(millout, "VIA '%s' (%.4f %.4f);\n", OutlineMillSignal, x1 - Distance_Copper_Dimension - 1, y1 - Distance_Copper_Dimension - 1);
+    Cmd += millout;
+    sprintf(millout, "CHANGE ISOLATE 0;\n");
+    Cmd += millout;
+    sprintf(millout, "CHANGE ORPHANS OFF;\n");
+    Cmd += millout;
+    // Width = MillFree-Diameter/2 minus "Distance Copper/Dimension"
+    sprintf(millout, "POLYGON '%s' %.4f (%.4f %.4f) (%.4f %.4f)(%.4f %.4f);\nRATSNEST;\n",
+                        OutlineMillSignal, distanceDimension,
+                        x1 - DimensionMillTool - Distance_Copper_Dimension - 2,  // 2mm outside
+                        y1 - DimensionMillTool - Distance_Copper_Dimension - 2,
+                        x2 + DimensionMillTool + Distance_Copper_Dimension + 2,
+                        y2 + DimensionMillTool + Distance_Copper_Dimension + 2,
+                        x1 - DimensionMillTool - Distance_Copper_Dimension - 2,
+                        y1 - DimensionMillTool - Distance_Copper_Dimension - 2);
+    Cmd += millout;
+    Cmd += "WINDOW FIT;\n";
+    Cmd += RUN_pass(PassDimensionPoly);
+    if (test) output(filesetext(B.name, "-cmd.txt"), "wt") printf("%s", Cmd);
+    exit (Cmd);
+  }
+}
+
+
+//
+// The actual outlines generator
+void GenerateOutlines(void) {
+  board(B) {
+    trueOutlineDraw(OutlineMillSignal);
+    string s;
+    real x1 = u2mm(B.area.x1) - MillToolFree, y1 = u2mm(B.area.y1) - MillToolFree,
+         x2 = u2mm(B.area.x2) + MillToolFree, y2 = u2mm(B.area.y2) + MillToolFree;
+    real distanceDimension = MillToolFree / 2 - Distance_Copper_Dimension;
+    if (distanceDimension < 0) distanceDimension = 0.001;
+
+    string Cmd = "SET WIRE_BEND 2;\n";
+
+    //  delete virtual Polygon and VIA
+    B.signals(S) {
+      if (S.name == OutlineMillSignal) {   // 2008.05.05
+        S.vias(V) {
+          sprintf( s, "RIPUP (%.4f %.4f);\n",
+                   u2mm(V.x), u2mm(V.y) );
+          Cmd += s;
+          break;
+        }
+        S.polygons(POL) {
+          POL.wires(W) {
+            sprintf( s, "DELETE (S%.4f %.4f);\n",
+                     u2mm(W.x1), u2mm(W.y1) );
+            Cmd += s;
+            break;
+          }
+          break;
+        }
+      }
+    }
+    sprintf(s, "CHANGE ISOLATE %.4f;\n", MillToolIsolate);  // 26.07.2006
+    Cmd += s;
+    sprintf(s, "CHANGE RANK 6;\n");  // 26.07.2006
+    Cmd += s;
+    sprintf(s, "POLYGOn %s %.4f %s;\nRATSNEST;\n",
+                OutlinesSignalName, MillToolOutl, trueOutline_coordinate);
+    Cmd += s;
+    Cmd += RUN_pass(Pass2);
+    if (test) output(filesetext(B.name, "-cmd.txt"), "at") printf("%s", Cmd);
+    if (test) viewtest(Cmd);
+    exit(Cmd);
+  }
+}
+
+
+string WriteOutlines(string SignalName) { // OutlinesSignalName
+  board(B) {
+    if (InPassPour && MillToolFree == 0) return "";
+    if (InPassOutmill && !DimensionMillTool) return "";  // 0 = generate no Dimension with spacing
+    string Cmd;
+    B.signals(S) {
+      if (S.name == SignalName && !onlydrill) {
+        S.polygons(P) {
+          int x1 = INT_MAX, y1 = INT_MAX, x2 = INT_MIN, y2 = INT_MIN;
+          int x0, y0, first = 1;
+          int FrameWire;
+          int State;
+
+          P.wires(W) {
+            x1 = min(x1, W.x1);
+            x2 = max(x2, W.x1);
+            y1 = min(y1, W.y1);
+            y2 = max(y2, W.y1);
+          }
+          if (InPass2) {
+            DeviceReInit(Contour);
+          }
+          if (InPassPour) DeviceReInit(BlowUp_RubOut);
+          if (InPassOutmill) DeviceReInit(DimensionLine);
+          P.contours(W) {
+            if (first) {
+              // a new partial polygon is starting
+              x0 = W.x1;
+              y0 = W.y1;
+              FrameWire = (x1 == x0 || x2 == x0) && (y1 == y0 || y2 == y0);
+              State = 0;
+              first = 0;
+            }
+            else if (W.x2 == x0 && W.y2 == y0) {
+              // this was the last wire of the partial polygon,
+              // so the next wire (if any) will be the first wire
+              // of the next partial polygon
+              State = 2;
+              first = 1;
+            }
+            else State = 1;
+            if (!FrameWire) {
+              DeviceDraw(W.x1, W.y1, W.x2, W.y2, State);
+            }
+          }
+          if (InPassPour && millfreeyes) {
+            if (SelectedDevice == devScript) {
+              printf("# pouring\n");
+            }
+            DeviceReInit(BlowUp_RubOut);
+            State = 4;
+            int fx1[], fy1[], fx2[], fy2[];
+            int fcnt = 0;
+            P.fillings(F) {
+              fx1[fcnt] = F.x1;
+              fy1[fcnt] = F.y1;
+              fx2[fcnt] = F.x2;
+              fy2[fcnt] = F.y2;
+              fcnt++;
+            }
+            int diry = fy1[0];
+            for (int m = 0; m <= fcnt; m++) {
+              if (diry == fy1[m]) {
+                DeviceDraw(fx1[m], fy1[m], fx2[m], fy2[m], State);
+              }
+              else {
+                // ****** milling reverse ******
+                diry = fy1[m];  // next y_line
+                for (int mb = m; mb <= fcnt; mb++) {
+                  if (diry == fy1[mb]);
+                  else break;
+                }
+                for(int mback = mb -1 ; mback >= m; mback--) {
+                  DeviceDraw(fx2[mback], fy2[mback], fx1[mback], fy1[mback], State);
+                  // reverse milling 08.05.2002 alf@cadsoft.de
+                }
+                m = mb;
+                diry = fy1[m];  // next y_line
+                m--;
+              }
+            }
+          }
+          DeviceEnd();
+        }
+        break;
+      }
+    }
+    return Cmd;
+  }
+}
+
+
+void Pad(UL_PAD P) {
+  DeviceDraw(0, 0, P.x, P.y, 3);
+}
+
+
+void Package(UL_PACKAGE P) {
+  P.contacts(C) {
+    if (C.pad) Pad(C.pad);
+  }
+  return;
+}
+
+
+void Element(UL_ELEMENT E) {
+  Package(E.package);
+  return;
+}
+
+
+void PackageHole(UL_PACKAGE P) {
+  P.holes(H) {
+    if (u2mm(H.drill) > DrillHole) {
+      CircleDraw(H.x, H.y, H.drill, DrillHole*10000);  // 2007.09.21 der Fraesweg fuer grosse Bohrungen wurde falsch berechnet
+    }
+    else DeviceDraw(0, 0, H.x, H.y, 3);
+  }
+  return;
+}
+
+
+void ElementHole(UL_ELEMENT E) {
+  PackageHole(E.package);
+  return;
+}
+
+
+void WriteDrills(void) {
+  board(B) {
+    DeviceReInit(PadDrill);
+    B.elements(E) Element(E);
+    DeviceReInit(ViaDrill);
+    B.signals(S) {
+      S.vias(V) {
+        DeviceDraw(0, 0, V.x, V.y, 3);
+      }
+    }
+  }
+  return;
+}
+
+
+void WriteHoles(void) {
+  board(B) {
+    DeviceReInit(HoleDrill);
+    B.elements(E) ElementHole(E);
+    B.holes(H) {
+      if (u2mm(H.drill) > DrillHole) {
+        CircleDraw(H.x, H.y, H.drill, DrillHole*10000); // internal unit
+      }
+      else DeviceDraw(0, 0, H.x, H.y, 3);
+    }
+  }
+  return;
+}
+
+
+// *** Pen assaign
+void penAssign(void) {
+  dlgDialog("Mill outlines: HPGL Pen Assignment") {
+    string pen_assign = "<table>\n";
+    string t;
+    PenList[PadDrill]      = "PadDrill";
+    PenList[ViaDrill]      = "ViaDrill";
+    PenList[Contour]       = "Contour";
+    PenList[BlowUp_RubOut] = "Blow-Up/Rub-Out";
+    PenList[HoleDrill]     = "HoleDrill";
+    PenList[DimensionLine] = "DimensionLine";
+    sprintf(t, "<tr><td>PadDrill:</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", PadDrill, DrillPad);
+    pen_assign += t;
+    sprintf(t, "<tr><td>ViaDrill:</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", ViaDrill, DrillVia);
+    pen_assign += t;
+    sprintf(t, "<tr><td>Contour:</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", Contour, MillToolOutl);
+    pen_assign += t;
+    sprintf(t, "<tr><td>BlowUp/RubOut:</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", BlowUp_RubOut, MillToolFree);
+    pen_assign += t;
+    sprintf(t, "<tr><td>HoleDrill:</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", HoleDrill, DrillHole);
+    pen_assign += t;
+    sprintf(t, "<tr><td>Mill outline (Dimension):</td><td>PEN %d</td><td>%.1f mm</td><tr>\n", DimensionLine, DimensionMillTool);
+    pen_assign += t;
+    pen_assign += "</table>";
+    dlgLabel(pen_assign);
+    dlgHBoxLayout {
+      dlgStretch(0);
+      dlgPushButton("OK") dlgAccept();
+      dlgStretch(1);
+    }
+  };
+  return;
+}
+
+
+void selectDevice(void) {
+  File = filesetext(FileName, DeviceExt[SelectedDevice]);
+  if (SelectedDevice != devHPGL) {
+    info = showpic[12 + SelectedDevice];
+    DrFile = filesetext(DrillFile, DrillExt[SelectedDevice]);
+    DrillLabel = "D&rill file";
+    DrBrowse = "Bro&wse";
+  }
+  else {
+    info = showpic[12 + SelectedDevice];
+    DrFile ="";
+    DrillLabel = "D&rill file";
+    DrBrowse = "Bro&wse";
+  }
+  return;
+}
+
+
+void setMillOffset(void) {
+  board(B) {
+    path = filedir(B.name);
+    B.elements(E) {
+      if (E.package.name == ref_pac) {
+        ref_offsetX[ref_cnto] = E.x;
+        ref_offsetY[ref_cnto] = E.y;
+        ref_cnto++;
+        E.package.circles(C) {
+          if (C.layer == 45) {
+            ref_offsetX[ref_cnto] = C.x;
+            ref_offsetY[ref_cnto] = C.y;
+            ref_cnto++;
+          }
+        }
+        if(ref_offsetX[1] > ref_offsetX[2]) { // if first X > second X then swap
+          ref_offsetX[3] = ref_offsetX[2];
+          ref_offsetX[2] = ref_offsetX[1];
+          ref_offsetX[1] = ref_offsetX[3];
+        }
+        if (ref_cnto == 3) {
+          ref_null_offsetX = ref_offsetX[0] * -1;
+          ref_null_offsetY = ref_offsetY[0] * -1;
+          if (Mirror == -1) {
+            mirr_offsetx = (ref_offsetX[2] + ref_offsetX[1] + ref_null_offsetX) * -1;
+          }
+          else {
+            mirr_offsetx = ref_null_offsetX;
+          }
+        }
+        else {
+          ref_cnto = 0;  // more then 2 circles can't use as reference
+          if (dlgMessageBox("The reference Hole-Package contains more then 2 Holes\n" +
+                           "generate outlines without reference-offset", "accept", "break") != 0) exit(0);
+        }
+      }
+    }
+  }
+  return;
+}
+
+
+void setblowinfo(void) {
+  if (MillToolFree) {
+    if (millfreeyes) {            // 14.05.2002 alf
+      info = showpic[18];
+      infotext = "<nobr>Tool diameter for Blow-Up/Rub-Out<br>If value set to <b>0</b>, <b>no</b> Blow-Up (second isolate)<br>and Rub-Out (free milling) is generated.</nobr>";
+    }
+    else {
+      info = showpic[20];
+      infotext = "<nobr>Rub-Out is off!<br>Tool diameter for sec. isolate<br>If value set, Blow-Up (second isolate) is generated.</nobr>";
+    }
+  }
+  else {
+    if (millfreeyes) {
+      info = showpic[19];
+      infotext = "<nobr>You must set value to Blow-Up.</nobr>";
+    }
+    else {
+      info = showpic[19];
+      infotext = "<nobr>No blow up and Rub-Out is generated while value is set to 0.</nobr>";
+    }            // 14.05.2002 alf
+  }
+  return;
+}
+
+
+//
+// Main program:
+//
+// get Command-Line parameter if use RUN
+if (argv[1]) {
+  Device = argv[1];
+  if (argv[2]) {
+    MillToolOutl = strtod(argv[2]);
+    if (MillToolOutl <= 0)
+       Fatal("Illegal diameter for milling tool #1: " + argv[2], "The <i>diameter</i> must be greater than zero.");
+    MillToolIsolate = strtod(argv[3]);
+    MillToolFree = strtod(argv[4]);
+    if (argv[4]) {
+      Layer = strtol(argv[5]);
+      sprintf(lOutl, "outmil%d", Layer);
+      sprintf(lOutl1, "outmil%d", Layer+1);
+      sprintf(lOutl2, "outmil%d", Layer+2);
+
+      if (Layer < 0 || Layer > 16)
+        Fatal("Illegal layer: " + argv[5], "The <i>layer</i> must be one of 1..16 or 0 to use the current layer.");
+
+      if (argv[6]) {
+        FileName = argv[6];
+        DrillFile = argv[7];
+      }
+      Mirror = strtod(argv[9]);
+      if (Mirror == 0)
+        Fatal("Illegal mirror value: " + argv[9], "The <i> mirror</i> must be -1 or 1.");
+      DrillPad  = strtod(argv[10]);
+      if (DrillPad <= 0)
+        Fatal("Illegal diameter for Pad drill tool: " + argv[10], "The <i>diameter</i> must be greater than zero.");
+      DrillVia  = strtod(argv[11]);
+      if (DrillVia <= 0)
+        Fatal("Illegal diameter for Via drill tool: " + argv[11], "The <i>diameter</i> must be greater than zero.");
+      DrillHole = strtod(argv[12]);
+      if (DrillHole <= 0)
+        Fatal("Illegal diameter for Hole drill tool: " + argv[12], "The <i>diameter</i> must be greater than zero.");
+      OverlapOutlPercent = strtol(argv[13]);
+      OverlapRubOut = strtol(argv[14]);
+      Distance_Copper_Dimension = strtod(argv[15]);
+      DimensionMillTool = strtod(argv[16]);
+      millfreeyes = strtol(argv[17]);
+      Holder_Spacing = strtod(argv[18]);
+      onlydrill = strtol(argv[19]);
+      generatedrills = strtol(argv[20]);
+      trueOutline_coordinate = (argv[21]);
+    }
+  }
+}
+
+if (!FileName) board(B) FileName = filesetext(B.name, DefaultSuffix);
+if (!DrillFile) board(B) DrillFile = filesetext(B.name, DrlDefaultSuffix);
+if (Device) {
+  ValueInit();
+  int n;
+  while (DeviceNames[n]) {  // upper case
+    if (strupr(DeviceNames[n]) == strupr(Device)) {
+      SelectedDevice = n;
+      break;
+    }
+    n++;
+  }
+  if (!SelectedDevice)
+    Fatal("Illegal device: " + Device, "Please select one of the known devices.");
+}
+
+if (argv[8] == PassDimensionPoly)   InPassDimensionPoly = argv[8];  // generate true outlines
+if (argv[8] == Pass2)        InPass2 = argv[8];
+if (argv[8] == PassPour)     InPassPour = argv[8];
+if (argv[8] == PassOutmill)  InPassOutmill = argv[8];
+
+// *** run passes ***
+if ( !InPass2 && !InPassPour && !InPassOutmill && !InPassDimensionPoly) {
+  showpic[0]  = "<img src=\"mill-outlines-eagle.bmp\">";
+  showpic[1]  = "<img src=\"mill-outlines-free.bmp\">";
+  showpic[2]  = "<img src=\"mill-outlines-ovrlpfp.bmp\">";
+  showpic[3]  = "<img src=\"mill-outlines-pour.bmp\">";
+  showpic[4]  = "<img src=\"mill-outlines-ovrlppp.bmp\">";
+  showpic[5]  = "<img src=\"mill-outlines-drill.bmp\">";
+  showpic[6]  = "<img src=\"mill-outlines-via.bmp\">";
+  showpic[7]  = "<img src=\"mill-outlines-hole.bmp\">";
+  showpic[8]  = "<img src=\"mill-outlines-top.bmp\">";
+  showpic[9]  = "<img src=\"mill-outlines-bott.bmp\">";
+  showpic[10] = "<img src=\"mill-outlines-coppdim.bmp\">";
+  showpic[11] = "<img src=\"mill-outlines-nomir.bmp\">";
+  showpic[12] = "<img src=\"mill-outlines-mirror.bmp\">";
+  showpic[13] = "<img src=\"mill-outlines-script.bmp\">";
+  showpic[14] = "<img src=\"mill-outlines-hpgl.bmp\">";
+  showpic[15] = "<img src=\"mill-outlines-spacing.bmp\">";
+  showpic[16] = "<img src=\"mill-outlines-mildimension.bmp\">";
+  showpic[17] = "<img src=\"mill-outlines-null_reference.bmp\">";
+  showpic[18] = "<img src=\"mill-outlines-isol-pour.bmp\">";
+  showpic[19] = "<img src=\"mill-outlines-no-blowup.bmp\">";
+  showpic[20] = "<img src=\"mill-outlines-sec-isolate.bmp\">";
+  info = showpic[10];
+  infotext = DRCinfo +  usage +  "<br><img src=\"mill-outlines-drc-info.bmp\">";
+  string Layers[];
+  int    SelectedLayer = -1;
+  int    ForceDialog = (!Device || !MillToolOutl);
+
+  board(B) {
+    B.signals(S) {
+      if (S.name == OutlinesSignalName)
+        Fatal("There is already a signal named " + OutlinesSignalName + " in this board!", "Please make sure that there is no such signal in this board.");
+      // *** Check Rank - 26.07.2006 ***
+      string s;
+      int is_polygon = 0;
+      S.polygons(P) {
+        is_polygon++;
+        if (P.rank == 6) {
+          P.contours(W) {
+            sprintf(s, "!%s Polygon in Layer %d at (%.4f %.4f)mm has Rank 6.\n\nDo not use Rank 6 while working with this ULP.\n" +
+                       "Change the rank to 1..5 before using this ULP again.", S.name, P.layer, u2mm(W.x1), u2mm(W.y1) );
+            break;
+          }
+          dlgMessageBox(s, "OK");
+          exit(0);
+        }
+      }
+      if (is_polygon) { // *** 01.08.2006 check if Polygon used in Layout
+                        // wenn ein füllendes Polygon im Board plaziert ist, dann muß die Clearance um 0.005mm größer
+                        // sein als der Fräser, damit bei Leiterbahnen die nicht im 0� 45� oder 90� Winkel also mit
+                        // beliebigen Winkel verlegt sind, keine Füllprobleme wegen Rechenungenauigkeit auftauchen.
+        B.signals(S) {
+          if (u2mm(S.class.clearance) < MillToolOutl + 0.005) {
+            sprintf(s, "!Clearance from CLASS %d %s = %.4f.\nMust be 0.005mm > Tool#1 %.4f", S.class.number, S.class.name, u2mm(S.class.clearance), MillToolOutl);
+            dlgMessageBox(s, "OK");
+            exit(0);
+          }
+        }
+      }
+    }
+    int n;
+    B.layers(L) {
+      if (L.number <= 16 && L.visible) {
+        if (Layer == L.number) SelectedLayer = n;
+        sprintf(Layers[n++], "%d  %s", L.number, L.name);
+      }
+    }
+    if (n == 0) Fatal("No signal layer active!", "Please activate the signal layer to generate outlines for.");
+    if (!Layer) {
+      if (n > 1) ForceDialog = 1;
+      SelectedLayer = 0;
+    }
+    if (SelectedLayer < 0) {
+      string s;
+      sprintf(s, "%d", Layer);
+      Fatal("Invalid layer: " + s, "The <i>layer</i> was not found or is not active.");
+    }
+
+    if (ForceDialog) {
+      SelectedDevice = defaultdevice;
+      File = FileName;
+      DrFile = DrillFile;
+      DrillLabel = "D&rill file";
+      selectDevice();
+      int mir = 0;
+      dlgDialog(Version) {
+        dlgHBoxLayout {
+          dlgGridLayout {
+            dlgCell(0, 0) dlgLabel("&Device");
+            dlgCell(0, 1) dlgComboBox(DeviceNames, SelectedDevice) {
+              if (SelectedDevice) selectDevice();
+              else {
+                File = "";
+                DrFile = "";
+              }
+              // 26.07.2006
+              if      (SelectedDevice == devHPGL) infotext = "";
+              else if (SelectedDevice == devScript) {
+              infotext = "<nobr>Generate Layer+100 to read isolate milling, </nobr><br>" +
+                         "Layer+101 to read copper pouring milling,<br>" +
+                         "Layer+102 to read real outlines milling (Dimension)<br>" +
+                         "into board as wire.";
+            }
+          }
+          dlgCell(0, 3) dlgCheckBox("onl&y drills (HPGL)", onlydrill) {
+            if (onlydrill) {
+              generatedrills = 1;
+              infotext = "<nobr>Generate only drill file if HPGL selected.</nobr>";
+            }
+            else {
+              infotext = "";
+            }
+          }
+          dlgCell(0, 4) dlgPushButton("Pen &Assignment") { penAssign(); };
+          dlgCell(1, 0) dlgLabel("&Layer");
+          dlgCell(1, 1) dlgComboBox(Layers, SelectedLayer) {
+            if (SelectedLayer == 0) info = showpic[8];
+              if (SelectedLayer == 1) info = showpic[9];
+              infotext = "";
+            }
+            dlgCell(1, 3) dlgCheckBox("&Mirror", mir) {
+              if (mir) {
+                info = showpic[12];
+                infotext = "<nobr>Milling BOTTOM side (set mirror).</nobr>";
+                Mirror = -1.0;
+              }
+              else {
+                info = showpic[11];
+                infotext = "<nobr>Milling TOP side.</nobr>";
+                Mirror = 1.0;
+              }
+            }
+            dlgCell(1, 4) dlgPushButton("Refere&nce") {
+              info = showpic[17];
+              infotext = infoREFERENCE;
+              setZerroReference();
+            }
+            dlgCell(2, 0) dlgLabel("tool#&1 Isolate");
+            dlgCell(2, 1) dlgRealEdit(MillToolOutl, 0.005, 10);       // 08.10.2007 min. 5 micron wg. Laser
+            dlgCell(2, 2) dlgLabel("mm");
+            dlgCell(2, 4) dlgPushButton("Isolate info")  {
+              info = showpic[1];infotext = "<nobr>Tool diameter for isolate.</nobr>";
+            }
+            dlgCell(3, 0) dlgLabel("&Overlap\nisolate/blow-up");
+            dlgCell(3, 1) dlgIntEdit(OverlapOutlPercent, 0, 99);
+            dlgCell(3, 2) dlgLabel("%");
+            dlgCell(3, 4) dlgPushButton("Overlap info") {
+              info = showpic[2];
+              infotext = "<nobr>Overlap isolate - blow up in percent %.</nobr>";
+            }
+            dlgCell(4, 0) dlgLabel("tool#&2 blow-up");
+            dlgCell(4, 1) dlgRealEdit(MillToolFree, 0.0, 10);
+            dlgCell(4, 2) dlgLabel("mm");
+            dlgCell(4, 3) dlgCheckBox("Rub ou&t", millfreeyes)  setblowinfo();
+            dlgCell(4, 4) dlgPushButton("Blow up/Rub out info") {
+              info = showpic[18];
+              setblowinfo();
+            }
+            dlgCell(5, 0) dlgLabel("Overlap rub-o&ut");
+            dlgCell(5, 1) dlgIntEdit(OverlapRubOut, 0, 99);
+            dlgCell(5, 2) dlgLabel("%");
+            dlgCell(5, 4) dlgPushButton("Overlap info") {
+              info = showpic[4];
+              infotext = "Overlap rub-out diameter in percent %.";
+            }
+            dlgCell(6, 0) dlgLabel("&Pad drill");
+            dlgCell(6, 1) dlgRealEdit(DrillPad, 0.005, 10);          // 08.10.2007 min. 5 micron wg. Laser
+            dlgCell(6, 2) dlgLabel("mm");
+            dlgCell(6, 3) dlgCheckBox("Gen. drills", generatedrills) {
+              if (generatedrills) {
+                infotext = "<nobr>Generate drill data.</nobr>";
+              }
+              else {
+                infotext = "<nobr>Drills (PAD, VIA, HOLE) are disabled.<br>";
+              }
+            }
+            dlgCell(6, 4) dlgPushButton("Pad info")     { info = showpic[5]; infotext = "Pad drill diameter"; };
+            dlgCell(7, 0) dlgLabel("&Via drill");
+            dlgCell(7, 1) dlgRealEdit(DrillVia, 0.005, 10);
+            dlgCell(7, 2) dlgLabel("mm");
+            dlgCell(7, 4) dlgPushButton("Via info"){
+              info = showpic[6];
+              infotext = "Via drill diameter.";
+            }
+            dlgCell(8, 0) dlgLabel("&Hole drill");
+            dlgCell(8, 1) dlgRealEdit(DrillHole, 0.005, 10);
+            dlgCell(8, 2) dlgLabel("mm");
+            dlgCell(8, 4) dlgPushButton("Hole info"){
+              info = showpic[7];
+              infotext = "Hole drill diameter.";
+            }
+            dlgCell(9, 0) dlgLabel("Dist. &Copper/Dim");
+            dlgCell(9, 1) dlgRealEdit(Distance_Copper_Dimension, 0.0, 20);
+            dlgCell(9, 2) dlgLabel("mm");
+            dlgCell(9, 4) dlgPushButton("Distance info") {
+              info = showpic[10];
+              infotext = infotext = DRCinfo +  usage +
+                         "<br><img src=\"mill-outlines-drc-info.bmp\">";
+            }
+            dlgCell(10, 0) dlgLabel("Mill Board/D&im");
+            dlgCell(10, 1) dlgRealEdit(DimensionMillTool, 0.0, 5);
+            dlgCell(10, 2) dlgLabel("mm");
+            dlgCell(10, 3) dlgLabel(" (0 = OFF)");
+            dlgCell(10, 4) dlgPushButton("Dimension info") {
+              info = showpic[16];
+              if (DimensionMillTool) {
+                infotext = "<nobr>Mill diameter for cut out.<br>Set value 0 for switch <b>OFF</b> this function.</nobr>";
+              }
+              else {
+                infotext = "<nobr>Mill diameter for cut out.<br>Set value for switch <b>ON</b> this function.</nobr>";
+              }
+            }
+            dlgCell(11, 0) dlgLabel("Holder spac&ing");
+            dlgCell(11, 1) dlgRealEdit(Holder_Spacing, 0.1, 500);
+            dlgCell(11, 2) dlgLabel("mm");
+            dlgCell(11, 4) dlgPushButton("Spacing info") {
+              info = showpic[15];
+              infotext = "This value determins the minimum length of a edge where a spacer will be set.<p>" +
+                         "Spacers will be set on vertical & horizontal and in HPGL-Format only.<p>" +
+                         "The width of the spacer depends on the diameter of tool#2.";
+            }
+          }
+          dlgVBoxLayout dlgSpacing (400);  // high of Cell
+          dlgStretch(0);
+          dlgVBoxLayout {
+            dlgStretch(0);
+            dlgLabel(info, 1);
+            dlgStretch(0);
+            dlgLabel(infotext, 1);
+            dlgStretch(1);
+          }
+          dlgStretch(1);
+        }
+        dlgStretch(1);
+        dlgHBoxLayout {
+          dlgStretch(0);
+          dlgLabel("Mill fil&e");
+          dlgStretch(0);
+          dlgStringEdit(File);
+          dlgStretch(0);
+          dlgPushButton("&Browse") {
+            string fn = dlgFileSave("Save Outlines file", File);
+            if (fn) {
+              File = fn;
+              FileName = fn;
+              info = showpic[1];
+            }
+          }
+          dlgStretch(0);
+        }
+        dlgHBoxLayout {
+          dlgStretch(0);
+          dlgLabel(DrillLabel);
+          dlgStretch(0);
+          dlgStringEdit(DrFile);
+          dlgStretch(0);
+          dlgPushButton(DrBrowse) {
+          string fd = dlgFileSave("Save Drill file", DrFile);
+          if (fd) {
+            DrFile = fd;
+            DrillFile = fd;
+            info = showpic[3];
+          }
+        }
+        dlgStretch(0);
+      }
+      dlgStretch(1);
+      dlgHBoxLayout dlgSpacing(600);
+      dlgHBoxLayout {
+        dlgStretch(0);
+        dlgPushButton("+OK") {
+          if (!SelectedDevice) Error("No device selected!", "Please select a device.");
+          else {
+            int fault = 0;
+            real distanceDimension = DimensionMillTool / 2 - Distance_Copper_Dimension;
+            if (DimensionMillTool) {          //  ****  if used ?  ****
+              if (distanceDimension < 0) {
+                string d;
+                sprintf(d, "%.4f", distanceDimension * -1);
+                fault = dlgMessageBox("<qt><nobr>The value for Copper/Dimension "
+                                      "is greater than the mill tool (free pouring) diameter.<p>"
+                                      "Check/change Distance Copper/Dimension in Design Rules <b>DRC</b><p>"
+                                      "or accept a distance of " + d +
+                                      "mm to board dimension.</nobr></qt>",
+                                      "Accept", "Cancel");
+              }
+            }
+            if (SelectedDevice != devHPGL && onlydrill) {
+              Error("only drill (HPGL)", "used without HPGL device");
+              fault = 1;
+            }
+            if (!MillToolOutl) {
+              Error("Illegal diameter: 0", "The <i>Isolate diameter</i> must be greater than zero.");
+              fault = 1;
+            }
+            if (!fault) {
+              FileName = File;
+              if (test) output(filesetext(B.name, "-cmd.txt"), "at");
+              DrillFile = DrFile;
+              sprintf(lOutl, "%d", SelectedLayer + 100);
+              sprintf(lOutl1, "%d", SelectedLayer + 101);
+              sprintf(lOutl2, "%d", SelectedLayer + 102);
+              if (mir) Mirror = -1;
+              dlgAccept();
+            }
+          }
+        }
+        dlgStretch(0);
+        dlgPushButton("-Cancel") { dlgReject(); exit(1); }
+        dlgStretch(1);
+      }
+    };
+  }
+  Device = DeviceNames[SelectedDevice];
+  Layer = strtol(Layers[SelectedLayer]);
+  fileerror();
+  output(FileName, "wt");  // creat new file
+    if (fileerror()) exit (1);
+    output(filesetext(B.name, "_display$tmp-.scr"), "wt") {
+      printf("DISPLAY NONE 17 ");
+      board(B) {
+        B.layers(L) {
+          if (L.visible) printf("%d ",L.number);
+        }
+      }
+      switch (SelectedDevice) {
+        case devScript:
+                        printf(" %d;\n", Layer + 100);
+                        break;
+        case devHPGL:
+                        output(filesetext(FileName,".pli"), "wt") {
+                          printf("# Plot info generated by %s\n# from %s\n# at %s\n# Used tools\n", argv[0], B.name, t2string(time()) );
+                        }
+                        break;
+      }
+    }
+    toolFiles();                     // generate Rack and Wheel file
+    generateTruePolygonOutlines();   // generate the true Dimension outline as polygon.
+  }
+}
+
+// *** pass runs ****
+
+setMillOffset();   // get info of special package if placed
+
+if (InPassDimensionPoly) {
+  GenerateOutlines();  // for milling isolate
+}
+
+if (InPass2) {
+  board(B) {
+    real x1 = u2mm(B.area.x1) - MillToolFree/4 , y1 = u2mm(B.area.y1) - MillToolFree/2 ;
+    output(FileName, "at") {
+      DeviceInit(Contour);
+      switch (SelectedDevice) {
+        case devScript:
+                        scriptHeader();
+                        output(DrillFile, "wt") {
+                          DeviceInit(PadDrill);
+                          WriteDrills();
+                        }
+                        break;
+        case devHPGL:
+                        if (generatedrills) WriteDrills();
+                        break;
+      }
+      printf("%s", WriteOutlines(OutlinesSignalName));  // the isolated contour
+    }
+    if (MillToolFree < 0) MillToolFree = 0.2;
+    real overlapfree = MillToolFree * OverlapRubOut / 100;
+    real overlapoutl = MillToolOutl * OverlapOutlPercent / 100;
+    string Cmd;
+    B.signals(S) {
+      if (S.name == OutlinesSignalName) { // 2008.05.05
+        S.polygons(POL) {
+          POL.wires(W) {
+            sprintf(Cmd, "CHANGE WIDTH %.4f (%.4f %.4f);\n"
+                         "CHANGE ISOLATe %.4f (%.4f %.4f);\n"
+                         "RATSNEST;\n",
+                         MillToolFree - overlapfree, u2mm(W.x1), u2mm(W.y1),
+                         MillToolOutl + ( (overlapfree / 2 ) - overlapoutl), u2mm(W.x1), u2mm(W.y1) );
+            break;
+          }
+          break;
+        }
+        break;
+      }
+    }
+    Cmd += RUN_pass(PassPour);
+    if (test) output(filesetext(B.name, "-cmd.txt"), "at") printf("%s", Cmd);
+    if (test) viewtest(Cmd);
+    exit (Cmd);
+  }
+}
+
+
+if (InPassPour) {
+  board(B) {
+    output(FileName, "at") {
+      if (SelectedDevice == devScript) printf("# 2. isolate\n");
+      printf("%s", WriteOutlines( OutlinesSignalName)) ;
+      switch (SelectedDevice) {
+        case devScript:
+                        output(DrillFile, "at") WriteHoles();
+                        break;
+        case devHPGL:
+                        if(generatedrills) WriteHoles();
+                        break;
+        default:
+                        DeviceEnd();
+                        break;
+      }
+    }
+    real x1 = u2mm(B.area.x1) - MillToolFree/4, y1 = u2mm(B.area.y1) - MillToolFree/2;
+    real x2 = u2mm(B.area.x2) + MillToolFree/4, y2 = u2mm(B.area.y2) + MillToolFree/2;
+    // *** delete special polygon with signal name '_OUTLINES_' ***
+    string Cmd;
+    string millout;
+    sprintf(Cmd, "DISPLAY NONE 17 %d;\nDELETE ", Layer); // Delete Outline Polygon
+    string deloutline[];
+    int n = strsplit(deloutline, trueOutline_coordinate, ' ');
+    string s;
+    deloutline[1][0] = 'S';
+    sprintf(s, "(%s %s;\n", deloutline[1], deloutline[2]);  // 2008.05.05 delete the complete polygon with shift
+    Cmd += s;
+    // *** make virtual Net for Normal Polygon Orphan OFF     ***
+    // *** to define real board outline of dimension layer 20 ***
+    Cmd += "SET WIRE_BEND 2;\n";
+    sprintf(millout, "VIA '%s' (%.4f %.4f);\n", OutlineMillSignal, x1 - Distance_Copper_Dimension, y1 - Distance_Copper_Dimension);
+    Cmd += millout;
+    real distanceDimension = DimensionMillTool / 2 - Distance_Copper_Dimension;
+    if (distanceDimension < 0.0) {
+      distanceDimension = 0.001;
+    }
+    // Width = MillFree-Diameter/2 minus "Distance Copper/Dimension"
+    sprintf(millout, "CHANGE ISOLATE %.4f;\n", distanceDimension);
+    Cmd += millout;
+
+    if (test) {  // 26.07.2006
+      string s;
+      sprintf(s, "The calculated value:\nIsolate of true outline = %.4f\n\nDimension milling tool = %.4f mm\nDistance copper dimension = %.4f",
+                  distanceDimension,
+                  DimensionMillTool,
+                  Distance_Copper_Dimension);
+      if (dlgMessageBox(s, "OK", "Cancel") != 0) exit(0);
+    }
+    sprintf(millout, "CHANGE ORPHANS OFF;\n");
+    Cmd += millout;
+    Cmd += "SET WIRE_BEND 0;\n";
+    Cmd += "CHANGE RANK 1;\n";  // 26.07.2006
+    real dimensionwidth = DimensionMillTool - 2*distanceDimension;
+    if (dimensionwidth < 0) dimensionwidth = 0.1;
+    sprintf(millout, "POLyGON '%s' %.4f (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\nRATSNEST;\n", OutlineMillSignal, dimensionwidth,
+                      x1 - DimensionMillTool - Distance_Copper_Dimension,
+                      y1 - DimensionMillTool - Distance_Copper_Dimension,
+                      x2 + DimensionMillTool + Distance_Copper_Dimension,
+                      y2 + DimensionMillTool + Distance_Copper_Dimension,
+                      x1 - DimensionMillTool - Distance_Copper_Dimension,
+                      y1 - DimensionMillTool - Distance_Copper_Dimension);
+    Cmd += millout;
+    Cmd += RUN_pass(PassOutmill);
+    if (test) output(filesetext(B.name, "-cmd.txt"), "at") printf("%s", Cmd);
+    if (test) viewtest(Cmd);
+    exit (Cmd);
+  }
+}
+
+if (InPassOutmill) {
+  board(B) {
+    string Cmd;
+    real x1 = u2mm(B.area.x1) - DimensionMillTool/4, y1 = u2mm(B.area.y1) - MillToolFree/2,
+         x2 = u2mm(B.area.x2) + DimensionMillTool/4, y2 = u2mm(B.area.y2) + MillToolFree/2;
+
+    //    delete Virtual Polygon and VIA
+    sprintf(Cmd, "DELETE (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\n",
+                  x1, y1, x2, y2, x1, y1 );
+    output(FileName, "at") {
+      if (SelectedDevice == devScript) printf("# milling dimension\n");
+      printf("%s", WriteOutlines( OutlineMillSignal)) ;
+    }
+    switch (SelectedDevice) {
+      case devScript:
+                      Cmd += "SCRIPT '" + FileName + "';\n";  // execute script
+                      Cmd += "SCRIPT '" + filesetext(B.name, "_display$tmp-.scr") + "';\n";
+                      string s;
+                      sprintf(s, "DISPLAY %d;\n", Layer + 101);         // 26.07.2006
+                      Cmd += s;
+                      sprintf(s, "DISPLAY %d;\n", Layer + 102);
+                      Cmd += s;
+                      break;
+      case devHPGL:
+                      Cmd += "script '" + filesetext(B.name, "_display$tmp-.scr") + "';\n";
+                      break;
+    }
+    if (test) output(filesetext(B.name, "-cmd.txt"), "at") printf("%s", Cmd);
+    Cmd += "GRID LAST;\nSET UNDO_LOG ON;\nSET OPTIMIZING ON;\nWIN;\n";
+    switch (SelectedDevice) {
+      case devScript:
+                      break;
+      case devHPGL:
+                      if (test) showHPGLinfo();
+                      break;
+    }
+    // if (test) showRackFile();
+    if (test) viewtest(Cmd);
+    exit (Cmd);
+  }
+}

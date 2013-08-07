@@ -1,0 +1,1263 @@
+#usage "<b>Attributverwaltung</b><p> "
+       "Mit diesem ULP können Sie Attribute anlegen und verwalten. Für einige "
+       "Bauteile (speziell für Zeichnungsrahmen aus der Bibliothek "
+       "e-elektro-zeichnungsrahmen) sind schon bei der Bibliotheksdefinition "
+       "Attribute und die entsprechenden Textplatzhalter angelegt worden. <p>"
+       "Es wird unterschieden zwischen <b>lokalen</b> und <b>globalen</b> Attributen:<br>"
+       "Bei einem <b>lokalen</b> Attribut wurde in der Bibliothek im Symbol "
+       "ein Platzhaltertext (>ATTRIBUTNAME) angelegt und in der Devicedefinition "
+       "das entsprechende Attribut definiert. Der Attributwert ist üblicherweise "
+       "noch nicht festgelegt.<br> "
+       "Ein Attribut gilt ebenfalls als lokal, wenn es erst im Schaltplan "
+       "für ein spezielles Bauteil angelegt wurde. Der Platzhaltertext muss "
+       "aber bereits bei der Bauteildefinition im Symbol angelegt worden sein.<p>"
+       "Ein <b>globales</b> Attribut wird direkt im Schaltplan oder Board angelegt. "
+       "Es ist für alle Bauteile gültig, die bereits einen entsprechenden  "
+       "Platzhaltertext haben. Dieser muss bereits bei der Bauteildefinition "
+       "im Symbol angelegt worden sein. Globale Attribute werden üblicherweise "
+       "für Zeichnugsrahmen verwendet.<p> "
+       "Das ULP hilft Ihnen beim Bearbeiten und Erstellen von Attributen. "
+       "Nach dem Start entscheiden Sie zuerst was Sie tun möchten. "
+       "Es gibt die Möglichkeiten <i>LOKALE</i> oder <i>GLOBALE</i> Attribute zu "
+       "<i>bearbeiten</i> oder <i>anlegen</i>.<br> "
+       "Wollen Sie zum Beispiel für einen Zeichnungsrahmen ein globales Attribut anlegen, "
+       "wählen Sie unter <i>GLOBALE </i>die Option <i>anlegen</i>. "
+       "Doppelklicken Sie dann auf den Rahmen in der Liste der Bauteile. "
+       "Es öffnet sich ein neues Fenster mit den vorhandenen Attributen. "
+       "Durch Doppelklick auf einen Eintrag in der Liste wählen Sie das Attribut, "
+       "das angelegt werden soll. Es öffnet sich ein weiteres Fenster in dem Sie "
+       "den Wert für das Attribut definieren können.<br> "
+       "Aktivieren Sie unter Attribut bearbeiten die Option <i>ja</i>, "
+       "wenn Sie die Änderung übernehmen wollen, <i>nicht ändern</i>, wenn Sie "
+       "keine Änderung machen wollen, oder <i>löschen</i> wenn sie das Attribut "
+       "löschen wollen.<br>"
+       "Mit <i>OK</i> übernehmen Sie die Einstellungen.<br>"
+       "Dieselbe Vorgehensweise gilt auch für das Bearbeiten und Anlegen "
+       "von lokalen Attributen.<p>"
+       "Das ULP kann auch in einer Bibliothek im Device-Editor zum einfachen "
+       "erstellen und bearbeiten von lokalen Attributen verwendet werden.<p>"
+       "Benutzung des ULP:<br>"
+       "RUN e-attributverwaltung [+L | -L]<br>"
+       "<nobr>"
+       "Option +L setzt die Attribute aus einer definierbaren Liste im Deviceset (direkt ohne nachfragen)<br>"
+       "Option -L löscht die Attribute aus einer definierbaren Liste im Deviceset (direkt ohne nachfragen)<br>"
+       "</nobr>"
+       "<author>support@cadsoft.de</author>"
+
+
+string Version = "Version 2.1.1"; // 1.0.0 - 2008-04-17 support@cadsoft.de
+
+// 2.0.0 | 2008-11-07 - Globale Attribute von SCH -> BRD oder BRD -> SCH übertragen
+//                      bzw. zwischen SCH und BRD angleichen.
+//                      Technologien und Package-Varianten werden berücksichtigt
+// 2.0.1 | 2009-11-27 - Menü-Button mit ALT-Option
+//
+// 2.1.0 | 2009-12-17 - Es kann eine Liste von Attribute-Namen verwaltet werden,
+//                      um in Devices in der Bibliothek diese Attribute zu definieren.
+//                      Option +L setzt die Attribute aus der Liste ohne nachfragen
+//                      Option -L löscht die Attribute aus der Liste ohne nachfragen
+//
+// 2.1.1 | 2010-01-14 - Globale Attribute mit INDEX_Sxxx werden nicht berücksichtigt,
+//                      wegen e-seiten-index.ulp.
+//
+// 2.1.2 | 2010-02-10 - Liste erst in Funktion aus_liste_anlegen() laden.
+//
+
+string cmd, s;
+string Pname[], Psheet[];
+int    cntP = 0;
+int    cntA = 0;
+string AttribPart[];
+string AttribWert[];
+numeric string ListAttrib[];
+string Platzhalter[];
+string LPlatzhalter[];
+string variant[];
+string techno[];
+string reservedAttname = "INDEX_S"; // 2010-01-14
+
+string setze[] = { "nicht ändern", "ja", "löschen" };
+enum             {  nein,   ja,   loeschen }
+string Edit[]  = { "Device", "Part", "Element" };
+enum             {  Device,  Part,   Element };
+string aType[] = { "Lokale", "Globale" };
+enum             {  Lokal,   Global };
+enum             {  neu, bearbeiten };
+
+// 2008-09-02
+enum             {  DEVeditor, SCHeditor, BRDeditor };
+int    isBoard = 0;
+int    isSchematic = 0;
+string Ename[];
+int    cntE = 0;
+int    cntEA = 0;
+string AttribElement[];
+string EAttribWert[];
+string EListAttrib[];
+string EPlatzhalter[];
+
+string sch_attributte[], brd_attributte[];
+string sch_attributteValue[], brd_attributteValue[];
+int    cnt_schattr, cnt_brdattr;
+int    in_brd_sch = 0;
+
+string attdiff_sch[], attdiff_brd[], attdiff_val[];
+int    cntdiffs = 0;
+int    cntdiffb = 0;
+int    cntdiffval = 0;
+
+// 2009-12-15
+string attribute_list_datei = filesetext(argv[0], ".lst");
+string attribute_liste[];
+int    cntattributelist = 0;
+
+
+// ############## Funktionen ################
+string AttribT(string s) {
+  if (s[0] == '>') {    // folgende Textplatzhalter sind keine Attribute
+    if (s == ">NAME"  ||
+        s == ">PART"  ||
+        s == ">GATE"  ||
+        s == ">VALUE" ||
+        s == ">XREF"  ||
+        s == ">SHEET" ||
+        s == ">CONTACT_XREF"    ||
+        s == ">DRAWING_NAME"    ||
+        s == ">LAST_DATE_TIME"  ||
+        s == ">PLOT_DATE_TIME "
+       ) s = "";
+    else  s = strsub(s, 1);
+  }
+  else s = "";  // kein Attribut-Platzhalter, nur Text.
+  return s;
+}
+
+
+// ========== Unter-Menu Ändern ========== //
+string changeAttrib(string att, int Objekt, int newchange) {
+  string s[];
+  int    setAttrib = -1;
+  int cnt = strsplit(s, att, '\t');
+  if (s[1] == setze[1]) setAttrib = ja;
+  int Result = dlgDialog("Attribut") {
+    dlgLabel(s[0]);
+    dlgHBoxLayout {
+      dlgLabel("&Wert ");
+      dlgStringEdit(s[2]);
+    }
+    if (newchange == bearbeiten) {
+      dlgGroup("Attribut bearbeiten") {
+        dlgRadioButton("&nicht ändern", setAttrib);
+        dlgRadioButton("&ja", setAttrib);
+        dlgRadioButton("&löschen", setAttrib);
+      }
+    }
+    else {
+      dlgGroup("Attribut anlegen") {
+        dlgRadioButton("&nein", setAttrib);
+        dlgRadioButton("&ja", setAttrib);
+      }
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") {
+        if (setAttrib < 0) {
+          if (newchange == bearbeiten) dlgMessageBox("Wählen Sie eine Option,\nnein, ja, löschen", "OK");
+          else dlgMessageBox("Wählen Sie eine Option,\nnein, ja", "OK");
+        }
+        else {
+          att = s[0] + "\t" + setze[setAttrib] + "\t" + s[2];
+          for (int n = 3; n < cnt; n++) att += "\t" + s[n];
+          dlgAccept();
+        }
+      }
+      dlgPushButton("-Abbruch") dlgReject();
+      dlgStretch(1);
+    }
+  };
+  return att;
+}
+
+
+void setzealle(int nein_ja) {
+  string s[];
+  for (int a = 0; a < cntP; a++) {
+    int cnt = strsplit(s, ListAttrib[a], '\t');
+    ListAttrib[a] = s[0] + "\t" + setze[nein_ja] + "\t" + s[2];
+    for (int n = 3; n < cnt; n++) ListAttrib[a] += "\t" + s[n];
+  }
+  return;
+}
+
+
+void setze_attribut(int nein_ja, int sel) {
+//stop
+  string s[];
+  for (int n = 0; n < cntP; n++) {
+    if (AttribPart[n] == AttribPart[sel]) {
+      strsplit(s, ListAttrib[n], '\t');
+      ListAttrib[n] = s[0] + "\t" + setze[nein_ja] + "\t" + s[2] + "\t" + s[3] + "\t" + s[4];
+    }
+  }
+  return;
+}
+
+
+
+void setze_variant(int nein_ja, int sel) {
+  string s[];
+  for (int n = 0; n < cntP; n++) {
+    if (variant[n] == variant[sel]) {
+      strsplit(s, ListAttrib[n], '\t');
+      ListAttrib[n] = s[0] + "\t" + setze[nein_ja] + "\t" + s[2] + "\t" + s[3] + "\t" + s[4];
+    }
+  }
+  return;
+}
+
+
+void setze_techno(int nein_ja, int sel) {
+  string s[];
+  for (int n = 0; n < cntP; n++) {
+    if (techno[n] == techno[sel]) {
+      strsplit(s, ListAttrib[n], '\t');
+      ListAttrib[n] = s[0] + "\t" + setze[nein_ja] + "\t" + s[2] + "\t" + s[3] + "\t" + s[4];
+    }
+  }
+  return;
+}
+
+
+void copyPlatzhalterList(int L) {
+  for (int n = 0; n < L; n++) {
+    ListAttrib[n] = LPlatzhalter[n] + "\t" + setze[ja] + "\t";
+  }
+  ListAttrib[L] = "";  // letzter Eintrag löschen
+  cntP = L;
+  return;
+}
+
+
+void generateAttribScript(int Objekt, int Editor, string PartName, string Sheet) {
+  string a[];
+  int cnt;
+  sprintf(cmd, "EDIT %s;\n", Sheet);
+  if (deviceset) cmd = "";
+
+  for (int n = 0; n < cntP; n++) {
+    cnt = strsplit(a, ListAttrib[n], '\t');
+    if (a[1] == setze[ja]) {
+      if (deviceset) {
+        sprintf(s, "PACKAGE %s;\n", a[3]);
+        cmd += s;
+        sprintf(s, "TECHNOLOGY %s;\n", a[4]);
+        cmd += s;
+        sprintf(s, "ATTRIBUTE %s '%s';\n", a[0], a[2]);
+      }
+      else if (Objekt == Global) {
+        sprintf(s, "ATTRIBUTE * %s '%s';\n", a[0], a[2]);
+      }
+      else if (Objekt == Lokal) {
+        cmd += "CHANGE DISPLAY OFF;\n"; //  | VALUE | NAME | BOTH
+        sprintf(s, "ATTRIBUTE %s %s '%s';\n", PartName, a[0], a[2]);
+      }
+      else {
+        cmd += "CHANGE DISPLAY OFF;\n";
+        sprintf(s, "ATTRIBUTE %s %s '%s';\n", PartName, a[0], a[2]);
+      }
+      cmd+=s;
+    }
+    else if (a[1] == setze[loeschen]) {
+      if (deviceset) {
+        sprintf(s, "PACKAGE %s;\n", a[3]);
+        cmd += s;
+        sprintf(s, "TECHNOLOGY %s;\n", a[4]);
+        cmd += s;
+        sprintf(s, "ATTRIBUTE %s DELETE;\n", a[0]);
+      }
+      else if (Objekt == Global) {
+        sprintf(s, "ATTRIBUTE * %s DELETE;\n", a[0]);
+      }
+      else  {
+        sprintf(s, "ATTRIBUTE %s '%s' DELETE;\n", PartName, a[0]);
+      }
+      cmd+=s;
+    }
+  }
+  // if (dlgMessageBox(cmd, "OK", "esc") != 0) exit(-1);
+  exit(cmd);
+}
+
+
+void getTextPlatzhalterDS(UL_DEVICESET DS) {
+  cntP = 0;
+  DS.devices(D) {
+    string t[];
+    int n = strsplit(t, D.technologies, ' ');
+    n = 1; /************** nur eine Technologie behandeln,                ********
+            ************** alle Technologien haben die gleichen Attribute ********/
+    for (int na = 0; na < n; na++) {
+      string la[]; // lokales attribute
+      int cntla = 0;
+      D.attributes(A, t[na]) {
+        la[cntla] = A.name;
+        cntla++;
+      }
+      D.gates(G) {
+        G.symbol.texts(T) {
+          string s = AttribT(strupr(T.value)); // keine reservierten Textplatzhalter >NAME >VALUE >PART >GATE ...
+          for (int n = 0; n < cntla; n++) {
+            if (s == la[n]) {
+              s = ""; // Textplatzhalter schon benutzt
+              break;
+            }
+          }
+          if (s) {  // sammle Platzhalter
+            AttribPart[cntP] = s;        // zum selektieren eines Attribut
+            Platzhalter[cntP] = s;
+            ListAttrib[cntP] = s + "\t" + setze[ja] + "\t" + "" + "\t" + D.name + "\t" + t[na] ;
+            techno[cntP] = t[na];
+            variant[cntP] = D.name;
+            cntP++;
+          }
+        }
+      }
+    }
+  }
+  ListAttrib[cntP] = "";
+  return;
+}
+
+
+void getAttributeDS(UL_DEVICESET DS) {
+  cntP = 0;
+  cntA = 0;
+  DS.devices(D) {
+    string t[];
+    int n = strsplit(t, D.technologies, ' ');
+    for (int na = 0; na < n; na++) {
+      D.attributes(A, t[na]) {
+        AttribPart[cntA] = A.name;
+        AttribWert[cntA] = A.value;
+        ListAttrib[cntA] = A.name + "\t" + setze[ja] + "\t" + A.value + "\t" + D.name + "\t" + t[na] ;
+        techno[cntA] = t[na];
+        variant[cntA] = D.name;
+        cntA++;
+        AttribPart[cntA] = "";
+        ListAttrib[cntA] = "";
+      }
+    }
+    cntP = cntA;
+  }
+  return;
+}
+
+
+void clear_list(void) {  // zurück aus Untermenu löscht die Einträge aller Listen
+  cntP = 0;
+  cntA = 0;
+  cntE = 0;
+  ListAttrib[0] = "";
+  AttribPart[0] = "";
+  AttribWert[0] = "";
+  Platzhalter[0] = "";
+  EListAttrib[0] = "";
+  AttribElement[0] = "";
+  EAttribWert[0] = "";
+  EPlatzhalter[0] = "";
+  return;
+}
+
+
+int diff_attr_sch_brd(int menu_on) {
+  int notfound, n;
+  for (n = 0; n < cnt_schattr; n++) {
+    notfound = 1;
+    for (int x = 0; x < cnt_brdattr; x++) {
+      if (sch_attributte[n] == brd_attributte[x]) {
+        notfound = 0;
+        if (sch_attributteValue[n] != brd_attributteValue[x]) {
+          sprintf(attdiff_val[cntdiffval], "%s\t%s\t%s", sch_attributte[n], sch_attributteValue[n], brd_attributteValue[x]);
+          cntdiffval++;
+        }
+        break;
+      }
+    }
+    if (notfound) {
+      sprintf(attdiff_sch[cntdiffs], "%s\t'%s'", sch_attributte[n], sch_attributteValue[n]);
+      cntdiffs++;
+      attdiff_sch[cntdiffs] = ""; // letzen markieren
+    }
+  }
+  for (n = 0; n < cnt_brdattr; n++) {
+    notfound = 1;
+    for (int x = 0; x < cnt_schattr; x++) {
+      if (brd_attributte[n] == sch_attributte[x]) {
+        notfound = 0;
+        break;
+      }
+    }
+    if (notfound) {
+      sprintf(attdiff_brd[cntdiffb], "%s\t'%s'", brd_attributte[n], brd_attributteValue[n]);
+      cntdiffb++;
+      attdiff_brd[cntdiffb] = ""; // letzen markieren
+    }
+  }
+  if (!menu_on) return cntdiffs + cntdiffb;
+  return 0;
+}
+
+
+// ======== Unter-Menu ======== //
+// ### Attribute Menu zum Anlgen bzw. Ändern ###
+int menu(int Objekt, int Editor, string PartName, string Sheet, int newchange) {
+  int sel = -1;
+  int selp = -1;
+  int alle_setzen = -1;
+  string cnt_selAttrib = "";
+  string InfoCnt = " ";
+  string attmsg = " ";
+
+  switch(Editor) {
+    case Device  : if (newchange == neu) sprintf(InfoCnt, "%d Textplatzhalter in %s <b>%s</b> verfügbar", cntP, Edit[Editor], PartName);
+                   else sprintf(InfoCnt, "%d Attribute in %s <b>%s</b>", cntP, Edit[Editor], PartName);
+                   break;
+    case Part    : if (newchange == neu) sprintf(InfoCnt, "%d Textplatzhalter in %s <b>%s</b> sheet %s  verfügbar", cntP, Edit[Editor], PartName, Sheet);
+                   else sprintf(InfoCnt, "%d Attribute in %s <b>%s</b> sheet %s", cntP, Edit[Editor], PartName, Sheet);
+                   attmsg = "Attribute auch in Board übertragen.";
+                   break;
+    case Element : if (newchange == neu) sprintf(InfoCnt, "%d Textplatzhalter in %s <b>%s</b>  verfügbar", cntE, Edit[Editor], PartName);
+                   else sprintf(InfoCnt, "%d Attribute in %s <b>%s</b>", cntE, Edit[Editor], PartName);
+                   attmsg = "Attribute auch in Schaltplan übertragen.";
+                   break;
+  }
+  int srt = 1;
+  int RESULT = dlgDialog(aType[Objekt]+" Attribute") {
+    dlgHBoxLayout dlgSpacing(300);
+    dlgLabel(InfoCnt, 1);
+    dlgHBoxLayout {
+      dlgVBoxLayout dlgSpacing(500);
+      switch(Editor) {
+        case Device  : dlgListView("Attribute\tDefiniert\tWert\tVariant\tTechnologie", ListAttrib, sel, srt) {
+                           ListAttrib[sel] = changeAttrib(ListAttrib[sel], Objekt, newchange);
+                       }
+                       sprintf(InfoCnt, "DEVICE %d Attribute", cntP);
+                       break;
+        case Part    : dlgListView("Attribute\tDefiniert\tWert", ListAttrib, sel, srt) {
+                         ListAttrib[sel] = changeAttrib(ListAttrib[sel], Objekt, newchange);
+                       }
+                       break;
+        case Element : dlgListView("Attribute\tDefiniert\tWert", ListAttrib, sel, srt) {
+                         ListAttrib[sel] = changeAttrib(ListAttrib[sel], Objekt, newchange);
+                       }
+                       break;
+      }
+    }
+
+    dlgHBoxLayout {
+      if (newchange == bearbeiten) {
+        dlgGroup("Alle Attribute ändern") {
+          if (deviceset) {
+            dlgHBoxLayout {
+              dlgRadioButton("&nein", alle_setzen);
+              dlgRadioButton("&ja", alle_setzen);
+              dlgRadioButton("&löschen", alle_setzen);
+              dlgStretch(1);
+            }
+            dlgLabel("<hr>");
+            dlgHBoxLayout {
+              dlgPushButton("&Alle") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else setzealle(alle_setzen);
+              }
+              dlgPushButton("nur &Atrribute") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if(sel < 0) dlgMessageBox("Wählen sie ein Atrribut (stellvertretend in einer Zeile).", "OK");
+                else setze_attribut(alle_setzen, sel);
+              }
+              dlgPushButton("nur &Variant") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if (sel < 0) dlgMessageBox("Wählen sie eine Variante (stellvertretend in einer Zeile).", "OK");
+                else setze_variant(alle_setzen, sel);
+              }
+              dlgPushButton("nur &Technologie") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if (sel < 0) dlgMessageBox("Wählen sie eine Technologie (stellvertretend in einer Zeile).", "OK");
+                else setze_techno(alle_setzen, sel);
+              }
+              dlgStretch(1);
+            }
+          }
+          else {
+            dlgHBoxLayout {
+              dlgStretch(1);
+              dlgPushButton("&nein")    { alle_setzen = nein;     setzealle(alle_setzen); }
+              dlgPushButton("&ja")      { alle_setzen = ja;       setzealle(alle_setzen); }
+              dlgPushButton("&löschen") { alle_setzen = loeschen; setzealle(alle_setzen); }
+              dlgStretch(1);
+            }
+          }
+        }
+        dlgStretch(1);
+      }
+      else {
+        dlgGroup("Alle Attribute anlegen") {
+          if (deviceset) {
+            dlgHBoxLayout {
+              dlgRadioButton("&nein", alle_setzen);
+              dlgRadioButton("&ja", alle_setzen);
+              dlgRadioButton("&löschen", alle_setzen);
+              dlgStretch(1);
+            }
+            dlgLabel("<hr>");
+            dlgHBoxLayout {
+              dlgPushButton("&Alle") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else setzealle(alle_setzen);
+              }
+              dlgPushButton("nur &Atrribute") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if(sel < 0) dlgMessageBox("Wählen sie ein Atrribut (stellvertretend in einer Zeile).", "OK");
+                else setze_attribut(alle_setzen, sel);
+              }
+              dlgPushButton("nur &Variant") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if(sel < 0) dlgMessageBox("Wählen sie eine Variante (stellvertretend in einer Zeile).", "OK");
+                else setze_variant(alle_setzen, sel);
+              }
+              dlgPushButton("nur &Technologie") {
+                if (alle_setzen < 0) dlgMessageBox("Wählen sie, nein, ja, löschen.", "OK");
+                else if (sel < 0) dlgMessageBox("Wählen sie eine Technologie (stellvertretend in einer Zeile).", "OK");
+                else setze_techno(alle_setzen, sel);
+              }
+              dlgStretch(1);
+            }
+          }
+          else {
+            dlgHBoxLayout {
+              dlgStretch(1);
+              dlgPushButton("&nein") { alle_setzen = nein; setzealle(alle_setzen); }
+              dlgPushButton("&ja")   { alle_setzen = ja, setzealle(alle_setzen); }
+              dlgStretch(1);
+            }
+          }
+        }
+        dlgStretch(1);
+      }
+    }
+    dlgLabel("oder selektieren Sie ein Attribut durch Doppelklick in die Zeile.");
+    if (isBoard && isSchematic && Objekt != Lokal) {
+      dlgCheckBox(attmsg, in_brd_sch);
+    }
+
+    if (Objekt == Lokal && schematic) dlgLabel("<b>Anmerkung</b>: Lokale Attribute die im Device definiert sind, können nicht gelöscht werden.");
+    dlgHBoxLayout {
+      dlgStretch(1);
+      dlgLabel(Version);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgPushButton("-&Zurück") { dlgReject(); clear_list(); }
+      dlgStretch(1);
+      dlgPushButton("Hilfe") dlgMessageBox(usage, "OK");
+    }
+  };
+  return RESULT;
+}
+
+/************** SCHEMATIC ***************/
+void SCH_attribut_anlegen(int Type, string PartName, string PartSheet) {
+  cntP = 0;
+  cntA = 0;
+  int cntL = 0;
+  if (project.schematic) project.schematic(SCH) {
+    if (Type == Global) {
+      SCH.attributes(A) {  // sammle globale Attribute
+        if (strstr(A.name, reservedAttname) < 0) {  // 2010-01-14
+          AttribPart[cntA] = A.name;
+          AttribWert[cntA] = A.value;
+          cntA++;
+        }
+      }
+      SCH.parts(P) {
+        if (P.name == PartName) {
+          P.instances(I) {
+            I.gate.symbol.texts(T) {      // sammle Platzhalter
+              string s = AttribT(strupr(T.value));
+              if (s) {
+                Platzhalter[cntP] = s;
+                cntP++;
+                LPlatzhalter[cntL] = s;
+                cntL++;
+              }
+            }
+          }
+          Platzhalter[cntP] = "";
+        }
+      }
+    }
+    else {
+      SCH.parts(P) {
+        if (P.name == PartName) {
+          cntA = 0;
+          P.attributes(A) {  // sammle lokale Attribute
+            AttribPart[cntA] = A.name;
+            cntA++;
+          }
+          AttribPart[cntA] == "";
+          P.instances(I) {
+            I.gate.symbol.texts(T) {      // sammle Platzhalter
+              string s = AttribT(strupr(T.value));
+              if (s) {
+                Platzhalter[cntP] = s;
+                cntP++;
+                LPlatzhalter[cntL] = s;
+                cntL++;
+              }
+            }
+          }
+          Platzhalter[cntP] = "";
+        }
+      }
+    }
+  }
+  if (!cntP) {
+    dlgMessageBox("In <b>"+PartName+"</b> sind keine freien Textplatzhalter verfügbar!", "OK");
+    return;
+  }
+  if (cntP) {
+    copyPlatzhalterList(cntL);
+    if (menu(Type, SCHeditor, PartName, PartSheet, neu)) generateAttribScript(Type, SCHeditor, PartName, PartSheet);
+  }
+  return;
+}
+
+
+void SCH_attribut_bearbeiten(int Type, string PartName, string Sheet) {
+  cntP = 0;
+  cntA = 0;
+  if (project.schematic) project.schematic(SCH) {
+    if (Type == Global) {
+      SCH.attributes(A) {  // sammle globale Attribute
+        if (strstr(A.name, reservedAttname) < 0) {  // 2010-01-14
+          ListAttrib[cntA] = A.name + "\t" + setze[ja] + "\t" + A.value;
+          AttribPart[cntA] = A.name;
+          AttribWert[cntA] = A.value;
+          cntA++;
+        }
+      }
+      Platzhalter[cntA] = ""; // letzten Platzhalter markieren
+      ListAttrib[cntA] = "";
+      cntP = cntA;
+      if (cntP) {
+        if (menu(Type, SCHeditor, PartName, Sheet, bearbeiten)) generateAttribScript(Type, SCHeditor, PartName, Sheet);
+      }
+      else  dlgMessageBox("!Keine globalen Attribute definiert!", "OK");
+    }
+    else if (Type == Lokal) {
+      SCH.parts(P) {
+        if (P.name == PartName) {
+          P.attributes(A) {  // sammle lokale Attribute
+            ListAttrib[cntA] = A.name + "\t" + setze[ja] + "\t" + A.value;
+            Platzhalter[cntA] = A.name;
+            AttribWert[cntA] = A.value;
+            cntA++;
+          }
+        }
+      }
+      Platzhalter[cntA] = ""; // letzten Platzhalter markieren
+      ListAttrib[cntA] = "";
+      cntP = cntA;
+      if (cntP) {
+        if (menu(Type, SCHeditor, PartName, Sheet, bearbeiten)) generateAttribScript(Type, SCHeditor, PartName, Sheet);
+      }
+      else dlgMessageBox("In <b>"+PartName+"</b> sheet " + Sheet + " sind keine lokalen Attribute definiert!", "OK");
+    }
+  }
+  return;
+}
+
+
+/************** BOARD ***************/
+void BRD_attribut_anlegen(int Type, string ElementName) {
+  cntP = 0;
+  cntA = 0;
+  cntE = 0;
+  if (project.board) project.board(BRD) {
+    BRD.attributes(A) {  // sammle globale Attribute
+      AttribPart[cntA] = A.name;
+      AttribWert[cntA] = A.value;
+      cntA++;
+    }
+    BRD.elements(E) {
+      if (E.name == ElementName) {
+        cntA = 0;
+        E.attributes(A) {
+          AttribPart[cntA] = A.name;
+          cntA++;
+        }
+        AttribPart[cntA] == "";
+
+        E.package.texts(T) {   // sammle Platzhalter
+          // in Packages kann es sinnvoll sein, Platzhalter mehrfach zu platzieren,
+          // Beispiel: Zeichnungsrahmen für Top und Bottom, wegen gespiegeltem Ausdruck.
+          // Hier muß überprüft werden ob eine POlattzhalter dopplet definiert ist,
+          // da es sonst zu doppelter Definition kommt, und die letzte Defionition
+          // die entscheidende ist.
+          string s = AttribT(strupr(T.value)); // überprüfe auf reservierte Textplatzhalter wie >NAME >VALUE >GATE ...
+          if (s) {
+            int found = 0;
+            for(int n = 0; n < cntP; n++) {
+              if (Platzhalter[n] == s) {
+                found = 1;
+                break;
+              }
+            }
+            if (!found) {
+              Platzhalter[cntP] = s;
+              cntP++;
+              LPlatzhalter[cntE] = s;
+              cntE++;
+            }
+          }
+        }
+        Platzhalter[cntP] = "";
+      }
+    }
+  }
+  if (!cntP) {
+    dlgMessageBox("In <b>"+ElementName+"</b> sind keine freien Textplatzhalter verfügbar!", "OK");
+    return;
+  }
+  if (cntP) {
+    copyPlatzhalterList(cntP);
+    if (menu(Type, BRDeditor, ElementName, "BRD", neu)) generateAttribScript(Type, BRDeditor, ElementName, ".BRD");
+  }
+  return;
+}
+
+
+void BRD_attribut_bearbeiten(int Type, string ElementName) {
+  if (project.board) project.board(BRD) {
+    if (Type == Global) {
+      cntE = 0;
+      BRD.attributes(A) {  // sammle globale Attribute
+        ListAttrib[cntE] = A.name + "\t" + setze[ja] + "\t" + A.value;
+        AttribPart[cntE] = A.name;
+        AttribWert[cntE] = A.value;
+        cntE++;
+      }
+      cntP = cntE;
+      if (!cntP) dlgMessageBox("Keine globalen Attribute definiert!", "OK");
+      else {
+      if (menu(Type, BRDeditor, ElementName, "BRD", bearbeiten)) generateAttribScript(Type, BRDeditor, ElementName, ".BRD");
+      }
+    }
+    else if (Type == Lokal) {
+      cntE = 0;
+      BRD.elements(E) {
+        if (ElementName == E.name) {
+          E.attributes(A) {  // sammle lokale Attribute
+            ListAttrib[cntE] = A.name + "\t" + setze[ja] + "\t" + A.value;
+            Platzhalter[cntE] = A.name;
+            AttribWert[cntE] = A.value;
+            cntE++;
+          }
+        }
+      }
+      cntP = cntE++;
+      Platzhalter[cntP] = ""; // letzten Platzhalter markieren
+      ListAttrib[cntP] = "";
+      if (cntP) {
+        if (menu(Type, BRDeditor, ElementName, "BRD", bearbeiten)) generateAttribScript(Type, BRDeditor, ElementName, ".BRD");
+      }
+      else dlgMessageBox("In <b>"+ElementName+"</b> sind keine lokalen Attribute definiert!", "OK");
+    }
+  }
+  return;
+}
+
+
+/************** DEVICE ***************/
+void DEV_attribut_bearbeiten(int Type, string PartName) {
+  deviceset(DS) {
+    getAttributeDS(DS);
+    if (cntA) {
+      if (menu(Type, DEVeditor, PartName, "DEV", bearbeiten)) generateAttribScript(Type, DEVeditor, PartName, "");
+    }
+    else dlgMessageBox("In <b>" + PartName + "</b> sind keine Attribute in definiert!", "OK");
+  }
+  return;
+}
+
+
+void DEV_attribut_anlegen(void) {
+  deviceset(DS) {
+    getTextPlatzhalterDS(DS);
+    if (!cntP) {
+      dlgMessageBox("In <b>" + DS.name + "</b> sind keine Textplatzhaltzer definiert,<br>oder keine freien Textplatzhalter verfügbar.", "OK");
+    }
+    else {
+      if (menu(Device, DEVeditor, DS.name, "DEV", neu)) generateAttribScript(Device, DEVeditor, DS.name, "");
+    }
+  }
+  return;
+}
+
+
+
+void generateAttribListe(string devname, string option) {
+  // kopiere Liste in Arbeitsliste
+  for (int n = 0; n < cntattributelist; n++) {
+    sprintf( ListAttrib[n], "%s\t%s\t", attribute_liste[n], option);
+  }
+  cntP = n;
+
+  generateAttribScript(Lokal, DEVeditor, devname, "");
+}
+
+
+void attributliste_sichern(void) {
+  output(attribute_list_datei, "wt") {
+    for (int n = 0; n < cntattributelist; n++) {
+      printf("%s\n", strupr(attribute_liste[n]));
+    }
+  }
+  return;
+}
+
+
+void attributliste_erweitern(void) {
+  string s;
+  dlgDialog("Attributliste bearbeiten") {
+    dlgHBoxLayout {
+      dlgLabel("Hinzufügen ");
+      dlgStringEdit(s);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") { attribute_liste[cntattributelist] = strupr(s); cntattributelist++; dlgAccept(); }
+      dlgPushButton("-Abbruch") dlgReject();
+    }
+  };
+  return;
+}
+
+
+void attributliste_delete(int sel) {
+  if (sel < 0) {
+    dlgMessageBox("wählen Sie einen Eintrag in der Liste", "OK");
+    return;
+  }
+  for (int n = sel; n < cntattributelist-1; n++) {
+    attribute_liste[n] = attribute_liste[n+1];
+  }
+  cntattributelist--;
+  attribute_liste[cntattributelist] = "";
+  return;
+}
+
+
+string attributliste_bearbeiten(string alt) {
+  string s = alt;
+  dlgDialog("Attributliste bearbeiten") {
+    dlgHBoxLayout {
+      dlgLabel("ändern ");
+      dlgStringEdit(s);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgPushButton("-Abbruch") {  s = alt; dlgReject(); }
+    }
+  };
+  return s;
+}
+
+
+void load_list(void) {
+  string fg[];
+  int fcnt = fileglob(fg, attribute_list_datei);
+  if (!fcnt) dlgMessageBox("Attributliste <b>" + attribute_list_datei + "</b> nicht gefunden!", "OK");
+  else cntattributelist = fileread(attribute_liste, attribute_list_datei);
+  return;
+}
+
+void aus_liste_anlegen(string devname) {
+  load_list();
+  int sel = -1;
+  dlgDialog("Attributliste verwalten") {
+    dlgLabel(attribute_list_datei);
+    dlgListView("Attr. Name", attribute_liste, sel) attribute_liste[sel] = strupr(attributliste_bearbeiten(attribute_liste[sel]));
+    // cntattributelist
+    dlgLabel("Listeneintrag");
+    dlgHBoxLayout {
+      dlgPushButton("Erweitern") attributliste_erweitern();
+      dlgPushButton("Löschen") attributliste_delete(sel);
+      dlgPushButton("Sichern") attributliste_sichern();
+      dlgStretch(1);
+    }
+    dlgLabel("Attribute ");
+    dlgHBoxLayout {
+      dlgPushButton("Anlegen") { dlgAccept(); generateAttribListe(devname, setze[ja]); }
+      dlgStretch(1);
+      dlgPushButton("-Abbruch") { dlgReject(); return; }
+    }
+  };
+  return;
+}
+
+
+void gen_attr_sch_brd(void) {  // 2008-09-10
+  if (board);
+  else sprintf(cmd, "EDIT .brd;\n");
+  for (int n = 0; n < cnt_schattr; n++) {
+    sprintf(s, "ATTRIBUTE * %s '%s';\n", sch_attributte[n], sch_attributteValue[n]);
+    cmd += s;
+  }
+  return;
+}
+
+
+void gen_attr_brd_sch(void) {
+  if (schematic);
+  else sprintf(cmd, "EDIT .sch;\n");
+  for (int n = 0; n < cnt_brdattr; n++) {
+    sprintf(s, "ATTRIBUTE * %s '%s';\n", brd_attributte[n], brd_attributteValue[n]);
+    cmd += s;
+  }
+  return;
+}
+
+
+void get_diff_attr_sch(void) {
+  int n = 0;
+  if (board);
+  else cmd = "EDIT .brd;\n";
+  do {
+    if (attdiff_sch[n]) {
+      string l[];
+      int ln = strsplit(l, attdiff_sch[n], '\t');
+      sprintf(s, "ATTRIBUTE * %s %s;\n", l[0], l[1]);
+      cmd += s;
+    }
+    n++;
+  } while (attdiff_sch[n]);
+  exit(cmd);
+}
+
+
+void get_diff_attr_brd(void) {
+  int n = 0;
+  if (schematic);
+  else cmd = "EDIT .sch;\n";
+  do {
+    if (attdiff_brd[n]) {
+      string l[];
+      int ln = strsplit(l, attdiff_brd[n], '\t');
+      sprintf(s, "ATTRIBUTE * %s %s;\n", l[0], l[1]);
+      cmd += s;
+    }
+    n++;
+  } while (attdiff_brd[n]);
+  exit(cmd);
+}
+
+
+void get_diff_val_sch(void) { // Werte der Attribute angleichen
+  int n = 0;
+  if (schematic);
+  else cmd = "EDIT .sch;\n";
+  do {
+    if (attdiff_val[n]) {
+      string l[];
+      int ln = strsplit(l, attdiff_val[n], '\t');
+      sprintf(s, "ATTRIBUTE * %s '%s';\n", l[0], l[2]);
+      cmd += s;
+    }
+    n++;
+  } while (attdiff_val[n]);
+   exit(cmd);
+}
+
+
+void get_diff_val_brd(void) { // Werte der Attribute angleichen
+  int n = 0;
+  if (board);
+  else cmd = "EDIT .brd;\n";
+  do {
+    if (attdiff_val[n]) {
+      string l[];
+      int ln = strsplit(l, attdiff_val[n], '\t');
+      sprintf(s, "ATTRIBUTE * %s '%s';\n", l[0], l[1]);
+      cmd += s;
+    }
+    n++;
+  } while (attdiff_val[n]);
+  exit(cmd);
+}
+
+
+
+// ======== main ======== //
+if (schematic || deviceset || board) {
+  int  npart = 0;
+  int  nelement = 0;
+
+  if (project.schematic) {
+    isSchematic = 1;
+    project.schematic(SCH) {
+      SCH.parts(P) {
+        Pname[npart] = P.name;
+        P.instances(I) {
+          sprintf(Psheet[npart], ".s%d", I.sheet);
+          break;
+        }
+        npart++;
+      }
+      SCH.attributes(A) {
+        sch_attributte[cnt_schattr] = A.name;
+        sch_attributteValue[cnt_schattr] = A.value;
+        cnt_schattr++;
+      }
+    }
+  }
+  if (project.board) {
+    isBoard = 1;
+    project.board(BRD) {
+      BRD.elements(E) {
+         Ename[nelement] = E.name;
+         nelement++;
+      }
+      BRD.attributes(A) {
+        brd_attributte[cnt_brdattr] = A.name;
+        brd_attributteValue[cnt_brdattr] = A.value;
+        cnt_brdattr++;
+      }
+    }
+  }
+  else if (deviceset) {
+    deviceset(DS) {
+      Pname[0] = DS.name;
+      npart = 1;
+    }
+    if (argv[1] == "+L") { load_list(); generateAttribListe(Pname[0], setze[ja]); }
+    if (argv[1] == "-L") { load_list(); generateAttribListe(Pname[0], setze[loeschen]); }
+  }
+  int psel = -1;
+  int esel = -1;
+  if (deviceset) psel = 0;
+  int Result;
+  string statsch, statbrd, statusdif;
+  sprintf(statsch, "%d Part(s) in SCH gefunden", npart);
+  sprintf(statbrd, "%d Element(s) in BRD gefunden", nelement);
+
+  if (isBoard && isSchematic) {
+    if (diff_attr_sch_brd(0)) sprintf(statusdif, "In Schematic und Board sind unterschiedliche globale Attribute definiert.");
+  }
+
+  // ======== Haupt-Menu ======== //
+  Result = dlgDialog("Attributverwaltung") {
+    int atttype = -1;
+    dlgHBoxLayout {      // ---------------------
+      if (deviceset) {
+        dlgVBoxLayout {
+          dlgGroup("Attribute") {
+            dlgLabel("LOKALE");
+            dlgHBoxLayout {
+              dlgPushButton("&Anlegen") DEV_attribut_anlegen();
+              dlgLabel(" aus Textplatzhalter in Symbolen.");
+              dlgStretch(1);
+            }
+            dlgHBoxLayout {
+              dlgPushButton("An&legen") aus_liste_anlegen(Pname[0]);
+              dlgLabel(" aus definierter Liste.");
+              dlgStretch(1);
+            }
+            dlgHBoxLayout {
+              dlgPushButton("&Bearbeiten") DEV_attribut_bearbeiten(Lokal, Pname[psel]);
+              dlgStretch(1);
+            }
+          }
+          dlgStretch(1);
+        }
+      }
+      else {
+        dlgTabWidget {
+          if (isSchematic) {
+            dlgTabPage("Schematic") {  // ######## Schaltplan #################
+              dlgVBoxLayout {
+                dlgGroup("Attribute") {
+                  dlgLabel("LOKALE");
+                  dlgHBoxLayout {
+                    dlgPushButton("an&legen") {
+                      if (psel < 0) dlgMessageBox("Wählen sie ein Part aus der Liste!", "OK");
+                      else if (psel >= 0) SCH_attribut_anlegen(Lokal, Pname[psel], Psheet[psel]);
+                    }
+                    dlgStretch(1);
+                    dlgLabel(" nur def. Textplatzhalter");
+                  }
+                  dlgHBoxLayout {
+                    dlgPushButton("b&earbeiten") {
+                      if (psel < 0) dlgMessageBox("Wählen sie ein Part aus der Liste!", "OK");
+                      else if (psel >= 0) SCH_attribut_bearbeiten(Lokal, Pname[psel], Psheet[psel]);
+                    }
+                    dlgStretch(1);
+                  }
+                  dlgLabel("<hr>");
+                  dlgLabel("GLOBALE");
+                  dlgHBoxLayout {
+                    dlgPushButton("&anlegen") {
+                      if (psel < 0) dlgMessageBox("Wählen sie ein Part aus der Liste!", "OK");
+                      else if(psel >= 0) SCH_attribut_anlegen(Global, Pname[psel], ".SCH");
+                    }
+                    dlgStretch(1);
+                    dlgLabel(" nur def. Textplatzhalter");
+                  }
+                  dlgHBoxLayout {
+                    dlgPushButton("&bearbeiten") {
+                      SCH_attribut_bearbeiten(Global, "*", ".SCH");
+                    }
+                    dlgStretch(1);
+                  }
+                }
+              }
+              dlgListView("Part", Pname, psel);
+              dlgLabel(statsch);
+            }
+          }
+          if (isBoard) {
+            dlgTabPage("Board") {      // ######## Layout #################
+              dlgVBoxLayout {
+                dlgGroup("Attribute") {
+                  dlgLabel("LOKALE");
+                  dlgHBoxLayout {
+                    dlgPushButton("anlegen") {
+                      if (esel < 0) dlgMessageBox("Wählen sie ein Element aus der Liste!", "OK");
+                      else BRD_attribut_anlegen(Lokal, Ename[esel]);
+                    }
+                    dlgStretch(1);
+                    dlgLabel(" nur def. Textplatzhalter");
+                  }
+                  dlgHBoxLayout {
+                    dlgPushButton("bearbeiten") {
+                      if (esel < 0) dlgMessageBox("Wählen sie ein Element aus der Liste!", "OK");
+                      else BRD_attribut_bearbeiten(Lokal, Ename[esel]);
+                    }
+                    dlgStretch(1);
+                  }
+                  dlgLabel("<hr>");
+                  dlgLabel("GLOBALE");
+                  dlgHBoxLayout {
+                    dlgPushButton("anlegen") {
+                      if (esel < 0) dlgMessageBox("Wählen sie ein Element aus der Liste!", "OK");
+                      else BRD_attribut_anlegen(Global, Ename[esel]);
+                    }
+                    dlgStretch(1);
+                    dlgLabel(" nur def. Textplatzhalter");
+                  }
+                  dlgHBoxLayout {
+                    dlgPushButton("bearbeiten") BRD_attribut_bearbeiten(Global, "*");
+                    dlgStretch(1);
+                  }
+                }
+              }
+              dlgVBoxLayout {
+                dlgListView("Element", Ename, esel);
+                dlgLabel(statbrd);
+              }
+            }
+          }
+        }
+      }
+      if (statusdif) {
+        dlgVBoxLayout {
+          dlgLabel(statusdif);
+          dlgHBoxLayout {
+            int globatt = -1; // 2008-09-10
+            int assel, absel;
+            if (isSchematic && isBoard) {
+              dlgHBoxLayout {
+                dlgVBoxLayout {
+                  dlgLabel("Schematic");
+                  dlgListView("Attributte", sch_attributte, assel);
+                  dlgHBoxLayout {
+                    dlgStretch(1);
+                    dlgPushButton("SCH >>") gen_attr_sch_brd();
+                  }
+                }
+                dlgVBoxLayout {
+                  dlgLabel("Board");
+                  dlgListView("Attributte", brd_attributte, absel);
+                  dlgHBoxLayout {
+                    dlgPushButton("<< BRD") gen_attr_brd_sch();
+                    dlgStretch(1);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      // Unterschiede ------------------------------------------------
+      if (cntdiffval || statusdif) {
+        int ssel, bsel, dsel;
+        dlgVBoxLayout {
+          dlgLabel(" ");
+          dlgGroup("Unterschiede") {
+            if (statusdif) {
+              dlgHBoxLayout {
+                dlgVBoxLayout {
+                  dlgListView("nicht im BRD\tValue", attdiff_sch, ssel);
+                  dlgHBoxLayout {
+                    dlgPushButton("in BRD übertragen") {
+                      get_diff_attr_sch();
+                      exit(cmd);
+                    }
+                    dlgStretch(1);
+                  }
+                }
+                dlgVBoxLayout {
+                  dlgListView("nicht im SCH\tValue", attdiff_brd, bsel);
+                  dlgHBoxLayout {
+                    dlgPushButton("in SCH übertragen") {
+                      get_diff_attr_brd();
+                      exit(cmd);
+                    }
+                    dlgStretch(1);
+                  }
+                }
+              }
+            }
+            if (cntdiffval) {
+              dlgLabel("Values");
+              dlgListView("Attributt\tSCH\tBRD", attdiff_val, dsel);
+              dlgHBoxLayout {
+                dlgStretch(1);
+                dlgPushButton("SCH >>> BRD") {
+                  get_diff_val_brd();
+                  exit(cmd);
+                }
+                dlgPushButton("SCH <<< BRD") {
+                  get_diff_val_sch();
+                  exit(cmd);
+                }
+                dlgStretch(1);
+              }
+            }
+          }
+        }
+      }
+    }
+    dlgHBoxLayout {
+      dlgStretch(1);
+      dlgLabel(Version);
+    }
+    dlgSpacing(8);
+    dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgPushButton("-Abbruch") dlgReject();
+      dlgStretch(1);
+      dlgPushButton("Hilfe") dlgMessageBox(usage, "OK");
+    }
+  };
+}
+
+else dlgMessageBox("Starten Sie das ULP in einem Schaltplan, Board oder Device (Bibliothek).", "OK");

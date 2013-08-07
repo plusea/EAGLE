@@ -1,0 +1,35 @@
+; Aperture file for Glaser DP-1504 fotoplotter
+
+; Basic "Draw" Apertures (will always work):
+
+SP1;SA1; draw      0.012
+SP1;SA2; draw      0.039
+SP2;SA1; draw      0.059
+SP2;SA2; draw      0.079
+
+; Emulated "Flash" Apertures (might not work because of a bug in the
+; plotter's firmware):
+
+;LB#027%\ round     0.012
+;LB#027&\ round     0.019
+;LB#027'\ round     0.025
+;LB#027(\ round     0.031
+;LB#027)\ round     0.039
+;LB#027*\ round     0.046
+;LB#027+\ round     0.052
+;LB#027,\ round     0.059
+;LB#027-\ round     0.066
+;LB#027.\ round     0.072
+;LB#027/\ round     0.079
+;LB#0270\ round     0.098
+;LB#0271\ round     0.118
+;LB#0272\ round     0.138
+;LB#0273\ round     0.157
+;LB#0274\ round     0.177
+;LB#0275\ round     0.197
+;LB#0276\ round     0.236
+;LB#0277\ round     0.315
+;LB#0278\ round     0.394
+;LB#027=\ square    0.063
+;LB#027>\ square    0.079
+;LB#027?\ square    0.157

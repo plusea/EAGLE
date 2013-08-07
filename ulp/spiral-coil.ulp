@@ -1,0 +1,373 @@
+#usage "<qt><nobr>This ULP calculates and place a coil.<p>"
+       "Depending from where you are starting the ULP, places pads (library) or vias (board).<p>"
+       "The calculation of coils or inductivities depends on a lot of "
+       "different factors, like<br>"
+       " -- basic material of the board<br>"
+       " -- thickness of the board<br>"
+       " -- number of layers<br>"
+       " -- thickness of the layers<br>"
+       " -- distances between elements<br>"
+       " -- tracks<br>"
+       " -- copper areas / ground plains<br>"
+       " -- thickness of the copper layers<br>"
+       " -- track width<br>"
+       " -- distances between tracks<br>"
+       " -- surface of tracks (tin?)<br>"
+       " -- the signal's frequency<br>"
+       " -- ...<br>"
+       "All these factors should be taken into consideration for the formula !<br>"
+       "used below to calculate an exact value for a coil. Nevertheless it !<br>"
+       "is necessary to check the result by a practical measurement. It is !<br>"
+       "very difficult to generate coils with exact values this way.<br>"
+       "Generally one can say that printed coils can be used in the MHz range only.<br>"
+       "<author>Author: support@cadsoft.de, </author></nobr></qt>";
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND,
+// EXPRESSED OR IMPLIED.
+
+#require 4.1106
+
+string Help = usage;
+
+//  **************----- german description -------------***************
+//   ----------------------------------------------------------------
+string deHelp =
+ "<qt><nobr>Dieses ULP berechnet eine Spiralspule.<p>" +
+ "Dieses ULP kann in der Libary ebenso wie im Board benutzt werden.<br>" +
+ "Je nachdem ob Sie es von einer Library oder von einem Borad aus "
+ "starten, werden Pads bzw. Vias plaziert.<br>" +
+ "<br>" +
+ "Die Berechnung der Windungen bzw. der Induktivitaet haengt von vielen Faktoren ab, wie z.B.:<br>" +
+ " - Basismaterial<br>" +
+ " - Staerke der Leiterplatte<br>" +
+ " - Anzahl der Lagen<br>" +
+ " - Dicke der Lagen<br>" +
+ " - Abstand zu benachbarten Bauteilen, Leitungen, Kupferflaechen, Masseflaechen etc.<br>" +
+ " - Dicke der Kupferbeschichtung<br>" +
+ " - Breite der Leiterbahn  (unteraetzen)<br>" +
+ " - Abstand zwischen den Leiterbahnen (Spiralkreise / Ã„tzgenauigkeit)<br>" +
+ " - Oberflaeche der Leiterbahn (Verzinnt)<br>" +
+ " - Signal-Frequenz<br>" +
+ " - ...<br>" +
+ "Um daraus einen einigermassen genauen Wert zu berechnen, muessten alle oben genannten Faktoren<br>" +
+ "als Korrekturwerte in die Formael einfliessen.<br>" +
+ "Was aber in jedem Fall durch entspechende Messungen nachgeprueft werden muesste.<br>" +
+ "In der Praxis sind Printspulen mit genau definierten Werten und in engen Toleranzen " +
+ "nur sehr schwer herzustellen.<br>" +
+ "Im Allgemeinen kann man davon ausgehen, dass Printspulen nur im MHz Bereich " +
+ "einigermassen Nutzbar sind.<br>" +
+ "<author>Author: support@cadsoft.de, </author></nobr></qt>";
+
+if (language() == "de") Help = deHelp;
+
+//   05.06.2002 alf@cadsoft.de
+//   24.01.2005 alf@cadsoft.de
+
+// ******************************************************************
+
+// Parameterliste  --  parameter section
+
+real n                = 4.0;      // number of turns
+real Wirewidth_mm     = 0.2;      // track width
+real Wiredistance_mm  = 0.2;      // min. distance between tracks
+real Diameter         = 0.6;      // pad/via diameter
+real Drill            = 0.4;      // drill diameter
+real offx             = 0.0;
+real offy             = 0.0;
+
+real UserArc;
+int windn;
+int wind1;                      // count of total turns
+real windlast;                  // reminder Turn
+real Ndist;                     // distance between turns
+
+string Shape = "ROUND";         // Pad/Via-Form nicht veraendern
+string direction = "CCW";       // *** Drehrichtung der Spirale nicht veraendern ***
+                                // *** Direction do not change ***
+string solderpoint;
+
+string cmd = "";
+string s;
+int    Layer = 1;
+
+
+ /*  calculate X coordinate by Radius */
+
+real Xneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserArc) {
+     real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+     real NewArc;                            /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+        {
+        if ((Xalt > Xorigin) && (Yalt >= Yorigin)) {           /* Quadrant 1 */
+           NewArc = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt < Xorigin) && (Yalt >= Yorigin)) {           /* Quadrant 2 */
+           NewArc = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt < Xorigin) && (Yalt < Yorigin)) {            /* Quadrant 3 */
+           NewArc = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt > Xorigin) && (Yalt < Yorigin)) {            /* Quadrant 4 */
+           NewArc = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt == Xorigin) && (Yalt == Yorigin)) {          /* Ursprung   */
+           NewArc = (Xalt - Xorigin) + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt == Xorigin) && (Yalt > Yorigin)) {           /* 90°        */
+           NewArc = (Xalt - Xorigin + 90) + UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        if ((Xalt == Xorigin) && (Yalt < Yorigin)) {           /* 270°       */
+	NewArc = (Xalt - Xorigin + 270)+ UserArc;
+           real rad = PI / 180 * NewArc;
+           return (RADIUS * cos(rad));
+           }
+        }
+}
+
+
+ /*  calculate Y coordinate by Radius */
+
+real Yneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserArc) {
+   real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+   real NewArc;                        /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+   {
+   if ((Xalt > Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 1 */
+        NewArc = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt < Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 2 */
+        NewArc = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt < Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 3 */
+        NewArc = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt > Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 4 */
+        NewArc = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt == Xorigin) && (Yalt == Yorigin)) {                /* Ursprung   */
+        NewArc = (Xalt - Xorigin) + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt == Xorigin) && (Yalt > Yorigin)) {                 /* 90°        */
+        NewArc = (Xalt - Xorigin + 90) + UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   if ((Xalt == Xorigin) && (Yalt < Yorigin)) {                 /* 270°       */
+	NewArc = (Xalt - Xorigin + 270)+ UserArc;
+        real rad = PI / 180 * NewArc;
+        return (RADIUS * sin(rad));
+        }
+   }
+}
+
+
+ /* place a Pad (Via) on startpoint */
+void PadViaS(real x1, real x2, real w, real g) {
+   real p = x1 + (Wirewidth_mm / 2) - (Diameter / 2);  //
+   sprintf( s, "%s  (%4.2f %4.2f);\n", solderpoint , p + offx , 0.0 + offy);
+   cmd += s;
+ }
+
+
+ /* place a Pad (Via) on endpoint */
+void PadViaE(real x1, real x2, real w, real g) {
+   real pRadius = x2 + ((x1 - x2) / 180 * g) + (Diameter / 2) - (Wirewidth_mm / 2) ;
+   real px = Xneu(pRadius, 0, 0, 0, w);
+   real py = Yneu(pRadius, 0, 0, 0, w);
+   sprintf( s, "%s  (%4.2f %4.2f);\n", solderpoint, px + offx, py + offy);
+   cmd += s;
+ }
+
+void doit(void) {
+  Ndist = (Wiredistance_mm + Wirewidth_mm ) ;     // distance ARC to ARC
+  windn = round(n);           // liefert x gerundet auf den nÃ¤chsten Integer-Wert.
+  wind1 = trunc(n);           // liefert den ganzzahligen Teil von n.
+  windlast = n - wind1;       // rest der letzten Windung
+  UserArc = 360 * windlast;
+  real startarc = 0;
+  real endarc   = 0;
+  real end2arc = 0;
+  real Y = 0;
+  int x = 0;
+  real ewx ;
+  real ewy ;
+
+  sprintf( s, "GRID mm;\n");
+  cmd += s;
+  sprintf( s, "Change dia %4.2f;\n", Diameter);
+  cmd += s;
+  sprintf( s, "Change shape %s;\n", Shape);
+  cmd += s;
+  sprintf( s, "Change drill %4.2f;\n", Drill);
+  cmd += s;
+  PadViaS( Ndist, Ndist, 0, 0);
+  sprintf( s, "change width %4.3f;\n", Wirewidth_mm);
+  cmd += s;
+  sprintf( s, "Change layer %d;\n", Layer);
+  cmd += s;
+
+  // full turns
+  for (x = 1; x <= wind1; x++) {
+        // first ARC -|- erster Halbbogen
+        startarc =  x * Ndist;
+        endarc   =  -(x * Ndist + (Ndist / 2));
+        sprintf( s, "ARC '%s' (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                      direction, startarc + offx, Y + offy, endarc + offx, Y + offy, endarc + offx, Y + offy);
+        cmd += s;
+        // second ARC -|- zweiter Halbbogen
+        end2arc =   (x + 1) * Ndist;
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                      endarc + offx, Y + offy, end2arc + offx, Y + offy, end2arc + offx, Y + offy);
+        cmd += s;
+  }
+
+  // last turn
+  if (UserArc >= 270) {    // ***** 270° - 359°
+        // first ARC -|- erster Halbbogen
+        startarc =   (x ) * Ndist;
+        endarc   =  -((x  * Ndist) + (Ndist / 2));
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                    startarc + offx, Y + offy, endarc + offx, Y + offy, endarc + offx, Y + offy);
+        cmd += s;
+        // finish ARC -|- letzter Halbbogen
+        end2arc =   (x + 1) * Ndist + (Ndist / 8);
+        ewx = Xneu(end2arc, 0, 0, 0, UserArc);
+        ewy = Yneu(end2arc, 0, 0, 0, UserArc);
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                     endarc + offx, Y + offy, end2arc + offx, Y + offy, ewx + offx, ewy + offy);
+        cmd += s;
+        PadViaE( end2arc, -endarc, UserArc, UserArc - 180);
+        UserArc = 0;
+  }
+
+  else if (UserArc >= 180) {    // ***** 180° - 270°
+        // finish ARC -|- letzter Halbbogen
+        startarc =   (x ) * Ndist;
+        endarc   =  -((x  * Ndist) + (Ndist / 2));
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                    startarc + offx, Y + offy, endarc + offx, Y + offy, endarc + offx, Y + offy);
+        cmd += s;
+        // finish ARC -|- letzter Halbbogen
+        end2arc =   (x + 1) * Ndist + (Ndist / 2);
+        ewx = Xneu(end2arc, 0, 0, 0, UserArc);
+        ewy = Yneu(end2arc, 0, 0, 0, UserArc);
+
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                    endarc + offx, Y + offy, end2arc + offx, Y + offy, ewx + offx, ewy + offy);
+        cmd += s;
+        PadViaE(end2arc, -endarc, UserArc, UserArc - 180);
+        UserArc = 0;
+  }
+
+  else if (UserArc >= 90) {    // ***** 90° - 180°
+        // finish ARC -|- letzter Halbbogen
+        startarc =   (x ) * Ndist;
+        endarc   =  -((x  * Ndist) + (Ndist / 2));
+        ewx = Xneu(startarc, 0, 0, 0, UserArc);
+        ewy = Yneu(startarc, 0, 0, 0, UserArc);
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                    startarc + offx, Y + offy, endarc + offx, Y + offy, ewx + offx, ewy + offy);
+        cmd += s;
+        PadViaE(-endarc, startarc , UserArc, UserArc);
+        UserArc = 0;
+  }
+
+  else if (UserArc > 0) {       // *****  0° - 90°
+        // finish ARC -|- letzter Halbbogen
+        startarc =   (x ) * Ndist;
+        endarc   =  -((x  * Ndist) + (Ndist / 2));
+        ewx = Xneu(startarc, 0, 0, 0, UserArc);
+        ewy = Yneu(startarc, 0, 0, 0, UserArc);
+        sprintf( s, "ARC (%6.3f %6.3f) (%6.3f %6.3f) (%6.3f %6.3f);\n",
+                    startarc + offx, Y + offy, endarc + offx, Y + offy, ewx + offx, ewy + offy);
+        cmd += s;
+        PadViaE(-endarc, startarc ,UserArc, UserArc );
+  }
+
+  else if (UserArc == 0) {
+        startarc =   (x ) * Ndist;
+        endarc   =  -((x  * Ndist) + (Ndist / 2));
+        PadViaE(-endarc, startarc ,UserArc, UserArc );
+  }
+
+      sprintf( s, "Change Layer tPlace;\n");
+
+  sprintf( s, "window (%6.3f %6.3f);\n", offx, offy);
+  cmd += s;
+  exit (cmd);
+}
+
+
+// *** main ***
+
+if (board) board(B) { solderpoint = "VIA"; };
+if (library) library(L) {solderpoint = "PAD"; };
+
+string ulp_path = filedir(argv[0]);
+string Spiral_H = "<img src=spiral-coil-ulp.bmp>";
+
+dlgDialog("Copper Spiral") {
+  dlgHBoxLayout {
+    dlgVBoxLayout {
+      dlgHBoxLayout {
+      dlgLabel("&Turns");                 // number of turns (Windungen)
+      dlgRealEdit( n, 1.0, 100.0);
+      dlgStretch(1);
+    }
+    dlgLabel(Spiral_H);
+    dlgHBoxLayout {
+    }
+  }
+  dlgVBoxLayout {
+    dlgGridLayout {
+      dlgCell(1, 1) dlgLabel("wire &width 'w'");                // track width
+      dlgCell(1, 2) dlgRealEdit(Wirewidth_mm, 0.01, 25.0);
+      dlgCell(2, 1) dlgLabel("wire &distance 'd'");             // min. distance between tracks
+      dlgCell(2, 2) dlgRealEdit(Wiredistance_mm, .01, 25.0);
+      dlgCell(3, 1) dlgLabel("Via/Pad di&ameter");              // pad/via diameter
+      dlgCell(3, 2) dlgRealEdit(Diameter, 0.1, 10.0);
+      dlgCell(4, 1) dlgLabel("Via/Pad d&rill");                 // drill diameter
+      dlgCell(4, 2) dlgRealEdit(Drill, .1, 10.0);
+      dlgCell(5, 1) dlgLabel("&Layer");                         // Layer number
+      dlgCell(5, 2) dlgIntEdit(Layer, 1, 255);
+      dlgCell(6, 1) dlgLabel("<hr>");
+      dlgCell(6, 2) dlgLabel("<hr>");
+      dlgCell(7, 1) dlgLabel("offset &X");                      // place with offset X
+      dlgCell(7, 2) dlgRealEdit( offx );
+      dlgCell(8, 1) dlgLabel("offset &Y");                      // place with offset Y
+      dlgCell(8, 2) dlgRealEdit( offy );
+
+      }
+    dlgStretch(1);
+    }
+  }
+  dlgLabel("<qt>All measures in <b>mm</b></qt>");
+  dlgHBoxLayout {
+    dlgPushButton("+&OK")     { dlgAccept(); doit(); }
+    dlgPushButton("-&Cancel") { dlgReject(); exit(0); }
+    dlgStretch(1);
+    dlgPushButton("&Help") dlgMessageBox(Help, "Ok");
+  }
+};
+
+

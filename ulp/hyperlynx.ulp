@@ -1,0 +1,1600 @@
+#usage "<qt>nobr><b>Exports the board to HyperLynx Signal-Integrity Transfer Format (.HYP)</b><p>"
+       "* HyprLynx.ULP Written by Frank Hoffman of LLOYD I/O INC<br>"
+       "* Copyright (c) 1997, All Rights Reserved by LLOYD I/O INC<br>"
+       "* 503/222-0702 frankh@lloydio.com www.lloydio.com"
+       "<p>"
+       "*  1 sided boards use layer 16<br>"
+       "*  2 sided boards use layers 1 and 16<br>"
+       "*  4 layer boards use layers 1,2 and 15, 16<br>"
+       "*  6 layer boards use layers 1,2,3 and 14,15,16<br>"
+       "*  8 layer boards use layers 1,2,3,4 and 13,14,15,16<br>"
+       "* 10 layer boards use layers 1,2,3,4,5 and 12,13,14,15,16<br>"
+       "* 12 layer boards use layers 1,2,3,4,5,6 and 11,12,13,14,15,16<br>"
+       "* 14 layer boards use layers 1,2,3,4,5,6,7 and 10,11,12,13,14,15,16<br>"
+       "* 16 layer boards use layers 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16<br>"
+       "* <br>"
+       "* Adapted for Eagle-Version 4.1 <br>"
+       "* - Unrouted layer not exported<br>"
+       "* - Export also Wire-Arcs<br>"
+       "* - SMD shape Roundnes is included<br>"
+       "* - PAD shape LONG OFFSET (Oblong) is included<br>"
+       "* - PAD accept Top, Bottom and Inner (MDEF) layer<br>"
+       "* - VIA generate only used layer in stack<br>"
+       "* 02.04.2004 alf@cadsoft.de<br>"
+       "* - W.curve correction in C.element.package.wires(W)<br>"
+       "* 21.04.2005 alf@cadsoft.de<br>"
+       "* - {PADSTACK=...%03d correct number while count from 1<br>"
+       "* 17.08.2005 alf@cadsoft.de<br>"
+       "* <br>";
+
+
+// Version 4.11 : W.curve correction in C.element.package.wires(W) 21.04.2005
+// Version 4.12 : Correct Padstack number while list from 0 (zerro) 03.05.2005
+//                The original ULP counts the PADSTACK-List from 1 (+1),
+//                the used Pads counts from 0 ! *** 03.05.2005
+// Version 4.13 : Correct Padstack counter in for { loop } *** 11.08.2005
+//                Check if a SMD-Pad dx=0 or dy=0 then aborted this ULP RUN.
+// Version 4.14 : Correct Padstack counter in all function, count now from 1 to total_pad
+//                eliminate correction of 4.12 from 03.05.2005
+
+string Version    = "Version 2.00 9/11/97 -- 4.14 17/08/2005";
+
+
+string headerline = "* Exports the board to HyperLynx Signal-Integrity Transfer Format (.HYP)";
+
+
+
+//***********************************************
+// Definitions of yes and no!  Do not modify!
+char yes = 1;  // yes must be different from no.
+char no  = 0;  // no must be zero (0)
+//********************************************************************************************
+//********************************************************************************************
+//********************************************************************************************
+// USER MODIFYABLE DATA
+
+// Generate Files Options:
+char GenerateReferenceFile = yes;    // Generate the Reference File  ('yes'/'no')
+char GenerateHyperlynxFile = yes;    // Generate the Hyperlynx File  ('yes'/'no')
+
+// Generate Component Types Options:
+char UseComponentTypes = yes;        // Devices Q, T, U, IC, C, D, L, R, BD, etc. ('yes'/'no')
+
+// Generate Component Pin Direction Options:
+char GeneratePinDirection = no;      // If 'yes', slows down many many times.
+
+// Component Value Change Options:
+char TruncateComponentValues = no;   // Truncate ".1uf 50v" to ".1uf" ('yes'/'no')
+char ConvertCapValues = yes;         // Convert Capacitor Values. i.e. change ".1" to ".1u" ('yes'/'no')
+string ConvertLT1to   = "uF";        // values less than 1 are labeled as this unit
+string ConvertGE1to   = "uF";        // convert greater than or equal to 1 are labeled as this unit
+
+// Board Thickness AND Stack Up Options:
+char UseBoardStackUp = yes;         // Use board thickness data   ('yes'/'no')
+real board_thickness = 0.0625;      // Board Thickness, if 0: use fixed layer sizes else calc layer thicknesses
+
+// Copper Value Options:
+real zerooz = 0.0000;               // zero copper thickness
+real halfoz = 0.0007;               // 0.5 oz copper thickness
+real oneoz  = 0.0014;               // 1.0 oz copper thickness
+real twooz  = 0.0028;               // 2.0 oz copper thickness
+// Copper Layer Thickness for Each Layer of Copper
+real copper_thickness[] = {0.0,  halfoz,halfoz,halfoz,halfoz,halfoz,halfoz,
+                                 halfoz,halfoz,halfoz,halfoz,halfoz,halfoz,
+                                 halfoz,halfoz,halfoz,halfoz}; // 1st number is not used (no layer 0)
+// Copper Layer Plating Thickness for Each Layer of Copper.
+// Top and Bottom are used most often.
+real copper_plating[]  = {0.0,  halfoz,zerooz,zerooz,zerooz,zerooz,zerooz,
+                                zerooz,zerooz,zerooz,zerooz,zerooz,zerooz,
+                                zerooz,zerooz,zerooz,halfoz}; // 1st number is not used (no layer 0)
+
+// Dielectric Value Options:
+real dicons = 4.8;           // default dielectric constant
+real dit1ly = 0.0611;        // dielectric thickness for 1 sided board
+real dit2ly = 0.0597;        // dielectric thickness for 2 sided board
+real ditmly = 0.0200;        // dielectric thickness for multilayered boards
+real dielectric_constant[]  = {  dicons,dicons,dicons,dicons,dicons,dicons,dicons,dicons,dicons};
+real dielectric_thickness[] = {  dit1ly,dit2ly,ditmly,ditmly,ditmly,ditmly,ditmly,ditmly,ditmly};
+
+// Special Wire Width Options:
+real RectOutlineWireWidth = 0.001;  // Rectangle outline wire width in inches
+real HoleOutlineWireWidth = 0.001;  // Holes outline wire width in inches
+
+// Precision of board components to accurately draw and locate.
+//  (After the decimal '.' point.)
+int precision_of_perimeter = 4;     // board perimeter dimension precision
+int precision_of_layers = 5;        // layer thickness precision
+int precision_of_pads = 3;          // pad/smd size precision
+int precision_of_nets = 4;          // pin/via/segment/width precision
+
+
+//********************************************************************************************
+//********************************************************************************************
+//********************************************************************************************
+// DO NOT MODIFY ANYTHING BELOW THIS LINE //
+
+int index[];                // sorting index array (indirect)
+
+// pad info
+int ISAPAD = 0;                   // through hole pad
+int ISASMD = 1;                   // surface mount device pad
+int ISAVIA = 18;                  //
+
+// *** HyperLynx pad shapes ***
+int OVALROUND  = 0;  // '0' means oval or round (pad_sx=pad_sy if round)
+int RECTSQUARE = 1;  // '1' means rectangular or square (pad_sx=pad_sy if square)
+int OBLONG     = 2;  // '2' means oblong (oblong shape is a rectangular with rounded corners)
+
+string PadShapes[];               // list of hyp's pad shapes
+string HypPadShapes[];            // list of hyp's pad shapes
+string EaglePadShapes[];          // list of eagle pad shapes
+int    Total_Pads = 0;            // total pads
+int    pad_type[];                // pad types (ISAPAD,ISASMD)
+int    pad_layer[];               // 0 = Pad, 1 or 16 = SMD, 18 = Via
+int    pad_shape_Top_rnds[];      // hyperlynx type OVALROUND, RECTSQUARE, OBLONG
+int    pad_shape_Inner[];         // hyperlynx type OVALROUND, RECTSQUARE, OBLONG
+int    pad_shape_Bott[];          // hyperlynx type OVALROUND, RECTSQUARE, OBLONG
+real   pad_angle_end[];           // Pad rotation or Via End layer (Vias can not rotate!)
+int    pad_diameter_Top_or_dx[];
+int    pad_diameter_Inner[];
+int    pad_diameter_Bott[];
+int    pad_dy_elong_start[]; // SMD-dy, Pad-Elongation, Via Stack-Start
+int    pad_drill[];
+
+string padStackList = "#\ttype\tlayer\tTop_rnd\tInner\tBott\tang_end\tdx_T\tdx_I\tdx_B\tdy_el\tdril\n";
+
+
+
+
+// copper layer info
+string LayerNames[];        // layer names
+int copp_lookup[]     = {0, 1,16, 2,15, 3,14, 4,13, 5,12, 6,11, 7,10, 8,9 };
+int copp_used_layer[];
+int Total_Layers;           // total number of used layers
+int layer_counter;          // layer counter
+real Total_Board_Thickness; // calculated total board thickness
+
+/* -----  Eagle HELP --------------------------------
+PAD_SHAPE_SQUARE       square
+PAD_SHAPE_ROUND        round
+PAD_SHAPE_OCTAGON      octagon
+PAD_SHAPE_LONG         long
+PAD_SHAPE_OFFSET       offset
+PAD_SHAPE_ANNULUS      annulus (only in Supply-Layer)
+PAD_SHAPE_THERMAL      thermal (only in Supply-Layer)
+-------------------------------------------------- */
+
+// define the HyperLynx Pad Shapes
+PadShapes[ PAD_SHAPE_SQUARE ]       = "1";       // hyp's square and rectangle shape
+HypPadShapes[ PAD_SHAPE_SQUARE ]    = "Square";  // HyperLynx's square and rectangle shape
+EaglePadShapes[ PAD_SHAPE_SQUARE ]  = "Square";  // Eagle's square and rectangle shape
+PadShapes[ PAD_SHAPE_ROUND ]        = "0";       // hyp's round and oval shape
+HypPadShapes[ PAD_SHAPE_ROUND ]     = "Round";   // HyperLynx's round and oval shape
+EaglePadShapes[ PAD_SHAPE_ROUND ]   = "Round";   // Eagle's round and oval shape
+PadShapes[ PAD_SHAPE_OCTAGON ]      = "0";       // hyp's octagon is a round shape
+HypPadShapes[ PAD_SHAPE_OCTAGON ]   = "Round";   // HyperLynx's octagon is a round shape
+EaglePadShapes[ PAD_SHAPE_OCTAGON ] = "Octagon"; // Eagle's octagon is a round shape
+PadShapes[ PAD_SHAPE_LONG ]         = "2";       // hyp's oblong, rectangle with rounded corners
+HypPadShapes[ PAD_SHAPE_LONG ]      = "Oblong";  // HyperLynx's oblong, rectangle with rounded corners
+EaglePadShapes[ PAD_SHAPE_LONG ]    = "Long";    // Eagle's oblong, rectangle with rounded corners
+PadShapes[ PAD_SHAPE_OFFSET ]       = "0";       // hyp's round and oval shape
+HypPadShapes[ PAD_SHAPE_OFFSET ]    = "Round";   // HyperLynx's oblong, rectangle with rounded corners
+EaglePadShapes[ PAD_SHAPE_OFFSET ]  = "Offset";  // Eagle's (Long) Offset, rectangle with rounded corners
+
+
+
+// ***************************************************************************
+// layers
+
+// This routine counts visible layers and stores the name in an internal table
+// Layer names beginning with '$' have the leading '$' striped.
+// This routine is called from a loop
+void CountLayers(UL_LAYER L) {
+  if ( ( L.number >= 1 ) && ( L.number <= 16  ) ) {
+    if ( strchr( L.name, '$' ) == 0 ) {
+      LayerNames[L.number] = strsub( L.name, 1 );
+    }
+    else {
+      LayerNames[L.number] = L.name;
+    }
+    if (L.visible) {
+      layer_counter++;
+      if (L.used) copp_used_layer[L.number] = 1;
+    }
+  }
+}
+
+// This routine writes out the layer names as signal layers or power planes
+// It also writes out the dielectric layer info when needed
+// This routine is called from a loop
+string layernam; // layer name buffer
+void PrintLayer(UL_LAYER L) {
+  real diele_thickness;   // calculated dielectric thickness
+  real copp_thickness;    // calculated total copper thickness
+  int i;                  // loop counter
+  if (L.visible) {
+    if ( L.number >= 1 && L.number <= 16 ) {
+      if ( strchr( L.name, '$' ) == 0 ) { // ** is it a Power plane?
+        layernam = strsub( L.name, 1 );
+        printf("(PLANE T=%6.*f L=%s)\n",
+        precision_of_layers, copper_thickness[L.number], layernam);
+      }
+      else {
+        printf("(SIGNAL T=%6.*f P=%6.*f L=%s)\n",
+                 precision_of_layers, copper_thickness[L.number],
+                 precision_of_layers, copper_plating[L.number],
+                 L.name);
+      }
+      layer_counter++;
+      if (board_thickness) {
+        Total_Board_Thickness = board_thickness;
+        copp_thickness = 0.0;
+        for (int i = 1; i <= Total_Layers; i++ ) {
+           copp_thickness += copper_thickness[copp_lookup[i]] + copper_plating[copp_lookup[i]];
+        }
+        if (Total_Layers <= 2 )  diele_thickness = ( board_thickness - copp_thickness );
+        else                     diele_thickness = ( board_thickness - copp_thickness ) / ( real(Total_Layers) - 1.00 );
+      }
+      else {
+        diele_thickness = dielectric_thickness[Total_Layers/2];
+        copp_thickness = 0.0;
+        for (int i = 1; i <= Total_Layers; i++ ) {
+          copp_thickness += copper_thickness[copp_lookup[i]] + copper_plating[copp_lookup[i]];
+        }
+        if (Total_Layers <= 2 ) Total_Board_Thickness = copp_thickness + diele_thickness;
+        else                    Total_Board_Thickness = copp_thickness + (diele_thickness * ( real(Total_Layers) - 1.00 ));
+      }
+      if (layer_counter < Total_Layers) {
+        printf("(DIELECTRIC T=%6.*f C=%4.*f ",
+              precision_of_layers,diele_thickness,
+              precision_of_layers,dielectric_constant[Total_Layers/2]);
+              printf("L=DL%02d)\n",layer_counter);
+      }
+      if (Total_Layers == 1) {
+              printf("(DIELECTRIC T=%6.*f C=%4.*f ",
+              precision_of_layers,diele_thickness,
+              precision_of_layers,dielectric_constant[Total_Layers/2]);
+              printf("L=DL%02d)\n",layer_counter);
+      }
+    }
+  }
+}
+
+
+
+// ***************************************************************************
+// pads
+
+int search_A_Pad( int apad_type, int apad_layer,
+                  int apad_shape_Top_rnds, int apad_shape_Inner, int apad_shape_Bott,
+                  real apad_angle_end,
+                  int apad_dx_Top, int apad_dx_Inner, int apad_dx_Bott,
+                  int apad_dy_elong_start,
+                  int apad_dril ) {
+  int found = 0;
+  for ( int i = 1; i <= Total_Pads; i++ ) {
+    if ( pad_type[i]                == apad_type &&
+         pad_layer[i]               == apad_layer &&
+         pad_shape_Top_rnds[i]      == apad_shape_Top_rnds &&
+         pad_shape_Inner[i]         == apad_shape_Inner &&
+         pad_shape_Bott[i]          == apad_shape_Bott &&
+         pad_angle_end[i]           == apad_angle_end &&
+         pad_diameter_Top_or_dx[i]  == apad_dx_Top &&
+         pad_diameter_Inner[i]      == apad_dx_Inner &&
+         pad_diameter_Bott[i]       == apad_dx_Bott &&
+         pad_dy_elong_start[i]      == apad_dy_elong_start&&
+         pad_drill[i]               == apad_dril )
+      {
+      found = i;
+      break;
+    }
+  }
+ return( found);
+}
+
+// This routine inserts a pad of known type and size into the pad table
+// The returned value reflects the current number of pads in the table
+// If the pad size already exists, the pad is not inserted
+
+void Insert_A_Pad( int apad_type, int apad_layer,
+                  int apad_shape_Top_rnds, int apad_shape_Inner, int apad_shape_Bott,
+                  real apad_angle_end,
+                  int apad_dx_Top, int apad_dx_Inner, int apad_dx_Bott,
+                  int apad_dy_elong_start,
+                  int apad_dril ) {
+
+  int fnd = search_A_Pad( apad_type, apad_layer, apad_shape_Top_rnds, apad_shape_Inner, apad_shape_Bott, apad_angle_end, apad_dx_Top, apad_dx_Inner, apad_dx_Bott, apad_dy_elong_start, apad_dril);
+  if (fnd == 0) {
+    Total_Pads++;
+    pad_type[Total_Pads]               = apad_type;
+    pad_layer[Total_Pads]              = apad_layer;
+    pad_shape_Top_rnds[Total_Pads]     = apad_shape_Top_rnds;
+    pad_shape_Inner[Total_Pads]        = apad_shape_Inner;
+    pad_shape_Bott[Total_Pads]         = apad_shape_Bott;
+    pad_angle_end[Total_Pads]          = apad_angle_end;
+    pad_diameter_Top_or_dx[Total_Pads] = apad_dx_Top;
+    pad_diameter_Inner[Total_Pads]     = apad_dx_Inner;
+    pad_diameter_Bott[Total_Pads]      = apad_dx_Bott;
+    pad_dy_elong_start[Total_Pads]     = apad_dy_elong_start;
+    pad_drill[Total_Pads]              = apad_dril;
+  }
+  return;
+}
+
+// This routine finds a pad of a known type and size and returns the ID
+// of the pad (internal number) that is used to identify the pad.
+
+int Find_A_Pad( int apad_type, int apad_layer,
+                int apad_shape_Top_rnds, int apad_shape_Inner, int apad_shape_Bott,
+                real apad_angle_end,
+                int apad_dx_Top, int apad_dx_Inner, int apad_dx_Bott,
+                int apad_dy_elong_start,
+                int apad_dril ) {
+  int fnd = search_A_Pad( apad_type, apad_layer, apad_shape_Top_rnds, apad_shape_Inner, apad_shape_Bott, apad_angle_end, apad_dx_Top, apad_dx_Inner, apad_dx_Bott, apad_dy_elong_start, apad_dril);
+  return( fnd );
+}
+
+// This routine finds the HyperLynx shape form of eagle shape
+int SmdRoundness(int r) {
+  if (r == 100) return 0;   // oval or round
+  if (r == 0)   return 1;   // rect or square
+  return 2;                 // oblong
+}
+
+
+// Insert a pin on in a list of associated connected contacts
+int AssPinCount = 0;  // Number of associated Contacts
+string AssTabEname[];  // Element Name
+string AssTabCname[];  // Contact Name
+int AssTabLenEname[];  // Element Name Length
+int AssTabLenCname[];  // Contact Name Length
+int InsertAssocatedPin( string ename, string cname ) {
+  int lenofename,lenofcname;
+  lenofename = strlen(ename);
+  lenofcname = strlen(cname);
+  if ( AssPinCount > 0 ) {
+    for ( int i = 0; i < AssPinCount; i++ ) {
+      if ( lenofename == AssTabLenEname[i] )
+        if ( lenofcname == AssTabLenCname[i] )
+          if ( strstr( AssTabEname[i], ename ) != -1 )
+            if ( strstr( AssTabCname[i], cname ) != -1 ) return( AssPinCount );
+    }
+  }
+  AssTabEname[AssPinCount] = ename;
+  AssTabCname[AssPinCount] = cname;
+  AssTabLenEname[AssPinCount] = lenofename;
+  AssTabLenCname[AssPinCount] = lenofcname;
+  AssPinCount++;
+  return( AssPinCount );
+}
+
+int FindAssocatedPin( string ename, string cname ) {
+  int lenofename,lenofcname;
+  lenofename = strlen(ename);
+  lenofcname = strlen(cname);
+  if ( AssPinCount > 0 ) {
+    for ( int i = 0; i < AssPinCount; i++ ) {
+      if ( lenofename == AssTabLenEname[i] )
+        if ( lenofcname == AssTabLenCname[i] )
+          if ( strstr( AssTabEname[i], ename ) != -1 )
+            if ( strstr( AssTabCname[i], cname ) != -1 ) return( AssPinCount );
+    }
+  }
+  return( 0 );
+}
+
+// write a divider
+void printdivider( void ) {
+  printf("**********************************************************************\n");
+  return;
+}
+
+// write a section header with dividers
+void printheader(string hs) {
+  printdivider();
+  printf("* %s\n*\n",hs);
+  return;
+}
+
+// write translated package types from Eagle to Hyperlynx
+int saypackagetype(string pn) {
+  if ( strstr( pn,"TSSOP" ) != -1 ) {
+    printf(" PKG=TSSOP");
+  }
+  else if ( strstr( pn,"TQFP" ) != -1 ) {
+    printf(" PKG=TQFP");
+  }
+  else if ( strstr( pn,"SSOP" ) != -1 ) {
+    printf(" PKG=SSOP");
+  }
+  else if ( strstr( pn,"PLCC" ) != -1 ) {
+    printf(" PKG=PLCC");
+  }
+  else if ( strstr( pn,"LCC" ) != -1 ) {
+    printf(" PKG=LCC");
+  }
+  else if ( strstr( pn,"DIP" ) != -1 ) {
+    printf(" PKG=DIP");
+  }
+  else if ( strstr( pn,"QFP" ) != -1 ) {
+    printf(" PKG=QFP");
+  }
+  else if ( strstr( pn,"BGA" ) != -1 ) {
+    printf(" PKG=BGA");
+  }
+  else if ( strstr( pn,"PGA" ) != -1 ) {
+    printf(" PKG=PGA");
+  }
+  else if ( strstr( pn,"DIL" ) != -1 ) {
+    printf(" PKG=DIP");
+  }
+  else if ( strstr( pn,"DIP" ) != -1 ) {
+    printf(" PKG=DIP");
+  }
+  else if ( strstr( pn,"SO" ) != -1 ) {
+    printf(" PKG=SO");
+  }
+  else return( no );  // no package type recognized
+  return( yes );      // yes, package recognized
+}
+
+
+// truncate trailing zeros and print value
+void TruncateTrailingZeros( real value, int prec ) {
+  string num;
+  int nlen;
+  sprintf( num, "%1.*f", prec, value );
+  nlen = strlen( num );
+  if ( nlen > 0 ) {
+    while ( num[ nlen-1 ] == '0' ) {
+      // truncate with a null
+      num[ nlen-1 ] = 0;
+      // recalc string length
+      nlen = strlen( num );
+      if ( nlen == 0 )  break;
+    }
+  }
+  printf("%s",num);
+  return;
+}
+
+// Convert Capacitor Values. i.e. change ".1" to ".1u"
+// char ConvertCapValues = yes;
+// Cap value conversion rules for values without suffix multipliers
+// string ConvertLT1to = "u";    // values less than 1 are "u" or "something else"
+// string ConvertGE1to = "u";    // convert greater than or equal to 1 as "u" or "p"
+//
+void ConvertCapValue( string capvalue ) {
+  char cstate;    // state machine
+  char clabel;    // unit label
+  real cvalue;    // the value of the capacitor
+  int lenofcapvalue;  // length of the string for parsing
+
+  if ( ConvertCapValues == yes ) {
+    cvalue = strtod( capvalue );
+    if ( cvalue != 0.0 ) {
+      lenofcapvalue = strlen( capvalue );
+      cstate = 1; // set state for searching digits
+      for ( int i=0; i<lenofcapvalue; i++ ) {
+        clabel = capvalue[ i ];
+        if ( isdigit( clabel ) || ( clabel == '.' ) ) {
+          cstate = 2; // digits found
+        }
+        else {
+          clabel = toupper( clabel );
+          if ( strchr( "FMUPN", clabel ) != -1 ) cstate = 3; // multiplier found
+          break;
+        }
+      }
+      // If the value NOT labeled with a multiplier, then label it
+      if ( cstate == 1 ) {
+        // report error for debugging purposes
+        printf("***no digits found***");
+      }
+      if ( cstate == 2 ) {
+        if ( cvalue < 1.0 ) {
+          TruncateTrailingZeros( cvalue, 6 );
+          printf("%s",ConvertLT1to);
+        } else {
+          TruncateTrailingZeros( cvalue, 6 );
+          printf("%s",ConvertGE1to);
+        }
+        return;
+      }
+      if ( cstate == 3 ) {
+        if ( clabel == 'M' ) {
+          TruncateTrailingZeros( cvalue, 6 );
+          printf("uF");
+          return;
+        }
+      }
+    }
+  }
+  printf( "%s", capvalue );
+  return;
+}
+
+// Search and Translate pin direction information if available and enabled
+void SayUPinFunction( string Ptname, string Paname ) {
+  int lofs1, lofs2;
+  string ipadname;
+
+  // check if search allowed
+  if ( GeneratePinDirection == no ) return;
+
+  // part name must begin with either IC or U
+  if ( ( strstr( Ptname, "IC" ) == 0 ) || ( strstr( Ptname, "U" ) == 0 ) ) {
+    if ( project.schematic ) {
+      project.schematic(SCH) {
+        SCH.parts(PT) {
+          lofs1 = strlen( Ptname );
+          lofs2 = strlen( PT.name );
+          if ( lofs1 == 0 ) return;
+          if ( lofs1 == lofs2 ) {
+            if ( strstr( PT.name, Ptname ) == 0 ) {
+              PT.instances(I) {
+                I.gate.symbol.pins(PIN) {
+                  if ( PIN.contact.pad ) ipadname = PIN.contact.pad.name;
+                  if ( PIN.contact.smd ) ipadname = PIN.contact.smd.name;
+                  lofs1 = strlen( ipadname );
+                  lofs2 = strlen( Paname );
+                  if ( lofs1 == 0 ) return;
+                  if ( lofs1 == lofs2 ) {
+                    if ( strstr( ipadname, Paname ) == 0 ) {
+                      switch ( PIN.direction ) {
+                          case PIN_DIRECTION_OUT:
+                          case PIN_DIRECTION_OC:
+                          case PIN_DIRECTION_HIZ:
+                                      printf(" F=SIM_OUT");
+                                      break;
+                          case PIN_DIRECTION_IO:
+                                      printf(" F=SIM_BOTH");
+                                      break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return;
+}
+
+
+
+// ***************************************************************************
+// board
+//
+// This is the MAIN() function of this ULP
+
+if (board) board(B) {
+  if ( GenerateReferenceFile == yes ) {
+    output( filesetext( B.name, ".REF" ) ) {
+      printdivider();
+      printf("%s\n", headerline);   // 03.05.2005 alf@cadsoft.de
+      printf("* %s\n*\n", Version);
+      printf("* %s\n*\n", EAGLE_SIGNATURE);
+      printf("* HyperLynx Board exported from:\n");
+      printf("* %s\n", B.name);
+      printf("* At %s\n*\n", t2string(time()));
+      if (project.schematic) {
+        printf("* Schematic is loaded.\n");
+      }
+      else {
+        printf("* Schematic NOT is loaded.\n");
+      }
+      printf("*\n*\n");
+
+      // Generate the cross references
+      printheader("Auto Mapped Reference File for ICs and Us");
+      int unknownIC, ICstate, ICvaluelen, ICccnt;
+      string ICname, ICvalue, ICpn, ICreflib;
+      B.elements(E) {
+        unknownIC = yes;  // set component as unknown
+        ICname = E.name;  // remember component reference designator
+        ICvalue = E.value;  // remember component value name (IC number)
+        // parse reference designators ?
+        if ( strstr( ICname, "IC" ) == 0 ) {
+          if ( isdigit( ICname[2] ) )  unknownIC = no;
+        }
+        else if ( isdigit( ICname[1] ) ) {
+          if ( strchr( ICname, 'U' ) == 0 )  unknownIC = no;
+        }
+        if ( unknownIC == no ) {
+          unknownIC = yes;  // reset component as unknown
+          if ( strstr( ICvalue, "74" ) == 0 ) {
+            ICstate = 0;
+            ICvaluelen = strlen( ICvalue );
+            ICccnt = 0;
+            for ( int i=2; i<ICvaluelen; i++ ) {
+              if ( isalpha( ICvalue[i] ) ) {
+                ICccnt++;
+              }
+            }
+            unknownIC = no;
+            if ( ICccnt > 0 ) {
+              ICreflib = "74" + strsub( ICvalue, 2, ICccnt ) + ".PML";
+            }
+            else {
+              ICreflib = "74TTL.PML";
+            }
+          } else
+          if ( strstr( ICvalue, "40" ) == 0 ) {
+            unknownIC = no;
+            ICreflib = "74HC.PML";
+            ICvalue = "74HC" + ICvalue;
+          }
+          if ( unknownIC == no ) {
+            printf("%s, %s, %s",ICname,ICreflib,ICvalue);
+            ICpn =E.package.name;
+            if ( strstr( ICpn,"TSSOP" ) != -1 ) {
+              printf("_TSSOP");
+            }
+            else if ( strstr( ICpn,"TQFP" ) != -1 ) {
+              printf("_TQFP");
+            }
+            else if ( strstr( ICpn,"SSOP" ) != -1 ) {
+              printf("_SSOP");
+            }
+            else if ( strstr( ICpn,"PLCC" ) != -1 ) {
+              printf("_PLCC");
+            }
+            else if ( strstr( ICpn,"LCC" ) != -1 ) {
+              printf("_LCC");
+            }
+            else if ( strstr( ICpn,"DIP" ) != -1 ) {
+              printf("_DIP");
+            }
+            else if ( strstr( ICpn,"QFP" ) != -1 ) {
+              printf("_QFP");
+            }
+            else if ( strstr( ICpn,"BGA" ) != -1 ) {
+              printf("_BGA");
+            }
+            else if ( strstr( ICpn,"PGA" ) != -1 ) {
+              printf("_PGA");
+            }
+            else if ( strstr( ICpn,"DIL" ) != -1 ) {
+              printf("_DIP");
+            }
+            else if ( strstr( ICpn,"DIP" ) != -1 ) {
+              printf("_DIP");
+            }
+            else if ( strstr( ICpn,"SO" ) != -1 ) {
+              printf("_SSOP");
+            }
+            printf("\n");
+          }
+        }
+      }
+    }
+  }
+
+  if ( GenerateHyperlynxFile == no ) {
+    exit( EXIT_SUCCESS );
+  }
+  output( filesetext( B.name, ".HYP" ) ) {
+    printdivider();
+    printf("%s\n", headerline); // 03.05.2005 alf@cadsoft.de
+    printf("* %s\n*\n", Version);
+    printf("* %s\n*\n", EAGLE_SIGNATURE);
+    printf("* HyperLynx Board exported from:\n");
+    printf("* %s\n", B.name);
+    printf("* At %s\n*\n", t2string(time()));
+
+    if (project.schematic) {
+      printf("* Schematic is loaded.\n");
+    }
+    else {
+      printf("* Schematic NOT is loaded.\n");
+    }
+    printf("*\n\n");
+    printf("{VERSION=2.10}  Compatible with Hyperlynx version 2.10.\n");
+    printf("{UNITS=ENGLISH WEIGHT}\n\n");
+
+    // BOARD OVERALL AREA DIMENSIONS
+    // Writes the board dimensions found on layer 20
+    printheader("Board Dimensions");
+    printf("{BOARD\n");
+    // wires on the dimension layer
+    B.wires(W) {
+      if (W.layer == 20 ) {
+        if (W.curve) {
+          // arcs in the dimension layer
+          printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Arcs: Board Outline Arc is CCW\n",
+                  precision_of_nets,u2inch(W.arc.x1),precision_of_nets,u2inch(W.arc.y1),
+                  precision_of_nets,u2inch(W.arc.x2),precision_of_nets,u2inch(W.arc.y2),
+                  precision_of_nets,u2inch(W.arc.xc),precision_of_nets,u2inch(W.arc.yc),
+                  precision_of_nets,u2inch(W.arc.radius) );
+        }
+        else {
+          printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Wires: From Board\n",
+                  precision_of_perimeter,u2inch(W.x1),precision_of_perimeter,u2inch(W.y1),
+                  precision_of_perimeter,u2inch(W.x2),precision_of_perimeter,u2inch(W.y2));
+        }
+      }
+    }
+    // rectangles on the dimension layer
+    B.rectangles(R) {
+      if (R.layer == 20 ) {
+        printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Board : Bottom\n",
+                precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y1),
+                precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y1) );
+        printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Board : Right\n",
+                precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y1),
+                precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y2) );
+        printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Board : Top\n",
+                precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y2),
+                precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y2) );
+        printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Board : Left\n",
+                precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y2),
+                precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y1) );
+      }
+    }
+    // polygons on the dimension layer
+    B.polygons(P) {
+      if (P.layer == 20 ) {
+        P.wires(W) {
+          if (W.layer == 20 ) {
+            printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Polygon Wires: From Board\n",
+                    precision_of_perimeter,u2inch(W.x1),precision_of_perimeter,u2inch(W.y1),
+                    precision_of_perimeter,u2inch(W.x2),precision_of_perimeter,u2inch(W.y2));
+          }
+        }
+      }
+    }
+    // circles in the dimension layer
+    B.circles(C) {
+    if (C.layer == 20 ) {
+       printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Circles: Board Outline Arc is CCW\n",
+                precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y),
+                precision_of_nets,u2inch(C.radius) );
+      }
+    }
+    // holes in the board
+    int halfdrilldiameter;
+    B.holes(H) {
+      halfdrilldiameter = H.drill / 2;
+      printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Holes: Board Outline Arc is CCW\n",
+               precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y+halfdrilldiameter),
+               precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y+halfdrilldiameter),
+               precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y),
+               precision_of_nets,u2inch(halfdrilldiameter) );
+    }
+    // package wires on the dimension layer
+    B.elements(E) {
+      E.package.wires(W) {
+        if (W.layer == 20 ) {
+          if (W.curve) {
+            // package arcs in the dimension layer
+            printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Arcs: Board Outline Arc is CCW Package %s in %s.LBR\n",
+                    precision_of_nets,u2inch(W.arc.x1),precision_of_nets,u2inch(W.arc.y1),
+                    precision_of_nets,u2inch(W.arc.x2),precision_of_nets,u2inch(W.arc.y2),
+                    precision_of_nets,u2inch(W.arc.xc),precision_of_nets,u2inch(W.arc.yc),
+                    precision_of_nets,u2inch(W.arc.radius),
+                    E.package.name,E.package.library );
+          }
+          else {
+            printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Wires: From Package %s in %s.LBR\n",
+                    precision_of_perimeter,u2inch(W.x1),precision_of_perimeter,u2inch(W.y1),
+                    precision_of_perimeter,u2inch(W.x2),precision_of_perimeter,u2inch(W.y2),
+                    E.package.name,E.package.library);
+          }
+        }
+      }
+      // package rectangles on the dimension layer
+      E.package.rectangles(R) {
+        if (R.layer == 20 ) {
+          printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Package %s in %s.LBR : Bottom\n",
+                  precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y1),
+                  precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y1),
+                  E.package.name,E.package.library );
+          printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Package %s in %s.LBR : Right\n",
+                  precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y1),
+                  precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y2),
+                  E.package.name,E.package.library );
+          printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Package %s in %s.LBR : Top\n",
+                  precision_of_perimeter,u2inch(R.x2),precision_of_perimeter,u2inch(R.y2),
+                  precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y2),
+                  E.package.name,E.package.library );
+          printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Rectangles: From Package %s in %s.LBR : Left\n",
+                  precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y2),
+                  precision_of_perimeter,u2inch(R.x1),precision_of_perimeter,u2inch(R.y1),
+                  E.package.name,E.package.library );
+        }
+      }
+      // package polygons on the dimension layer
+      E.package.polygons(P) {
+        if (P.layer == 20 ) {
+          P.wires(W) {
+            if (W.layer == 20 ) {
+               printf("(PERIMETER_SEGMENT X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f) Polygon Wires: From Package %s in %s.LBR\n",
+                        precision_of_perimeter,u2inch(W.x1),precision_of_perimeter,u2inch(W.y1),
+                        precision_of_perimeter,u2inch(W.x2),precision_of_perimeter,u2inch(W.y2),
+                        E.package.name,E.package.library);
+            }
+          }
+        }
+      }
+      // package circles in the dimension layer
+      E.package.circles(C) {
+       if (C.layer == 20 ) {
+         printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Circles: Board Outline Arc is CCW Package %s in %s.LBR\n",
+                  precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                  precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                  precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y),
+                  precision_of_nets,u2inch(C.radius),
+                  E.package.name,E.package.library );
+        }
+      }
+      // package holes
+      int halfdrilldiameter;
+      E.package.holes(H) {
+        halfdrilldiameter = H.drill / 2;
+        printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f) Holes: Board Outline Arc is CCW Package %s in %s.LBR\n",
+                 precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y+halfdrilldiameter),
+                 precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y+halfdrilldiameter),
+                 precision_of_nets,u2inch(H.x),precision_of_nets,u2inch(H.y),
+                 precision_of_nets,u2inch(halfdrilldiameter),
+                 E.package.name,E.package.library );
+      }
+    }
+    printf("}\n\n");
+
+    // LAYER INFORMATION
+    printheader("Thickness of Copper and Dielectric Layer Data");
+    if ( UseBoardStackUp == yes ) {
+      printf("{STACKUP\n");
+      layer_counter = 0;
+      B.layers(L) CountLayers(L);
+      Total_Layers = layer_counter; // remember active layers
+      layer_counter = 0;
+      B.layers(L) PrintLayer(L);
+      printf("}\n");
+      // TOTAL BOARD THICKNESS
+      printf("* Total Board Thickness %6.4f inch\n\n",Total_Board_Thickness);
+    }
+    else {
+      printf("* No PCB Thickness Data Generated !!! \n*\n\n");
+    }
+
+    // PACKAGES ON THE BOARD
+    printheader("Components");
+    printf("{DEVICES\n");
+    int unknowncomponenttype, pincount, componentspace;
+    string componentname;
+    string componentvalue;
+    B.elements(E) {
+      // get the number of pins
+      pincount = 0;
+      E.package.contacts(C) {
+        pincount++;
+      }
+      // set component as unknown
+      unknowncomponenttype = yes;
+      // remember component reference designator
+      componentname = E.name;
+      // truncate component values at the first space
+      // ? ASK HYPERLYNX : what about something like .1u 50v
+      componentvalue = E.value;
+      if ( TruncateComponentValues == yes )
+        if ( ( componentspace = strchr( componentvalue, ' ' ) ) != -1 )
+           componentvalue = strsub( componentvalue, 0, componentspace );
+      // parse reference designators ?
+      if ( UseComponentTypes == yes ) {
+        if ( strstr( componentname, "IC" ) == 0 ) {
+          if ( isdigit( componentname[2] ) ) {
+            printf("(IC REF=%s NAME=%s L=%s",componentname,componentvalue,
+                     E.mirror ? LayerNames[16] : LayerNames[1] );
+                     saypackagetype(E.package.name);
+            unknowncomponenttype = no;
+          }
+        }
+        else if ( strstr( componentname, "BD" ) == 0 ) {
+          if ( isdigit( componentname[2] ) ) {
+            printf("(BD REF=%s NAME=%s L=%s",componentname,componentvalue,
+                     E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+        }
+        else if ( strstr( componentname, "BEAD" ) == 0 ) {
+          if ( isdigit( componentname[4] ) ) {
+            printf("(BD REF=%s NAME=%s L=%s",componentname, componentvalue,
+                     E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+        }
+        else if ( isdigit( componentname[1] ) ) {
+          if ( strchr( componentname, 'U' ) == 0 ) {
+            printf("(IC REF=%s NAME=%s L=%s",componentname, componentvalue,
+                     E.mirror ? LayerNames[16] : LayerNames[1] );
+                     saypackagetype(E.package.name);
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'C' ) == 0 ) {
+            printf("(C REF=%s VAL=",componentname);
+            ConvertCapValue(componentvalue);
+            printf(" L=%s",E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'R' ) == 0 ) {
+            printf("(R REF=%s VAL=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'L' ) == 0 ) {
+            printf("(L REF=%s VAL=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'D' ) == 0 ) {
+            printf("(CR REF=%s NAME=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'J' ) == 0 ) {
+            printf("(J REF=%s NAME=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'Q' ) == 0 ) {
+            printf("(J REF=%s NAME=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+          else if ( strchr( componentname, 'T' ) == 0 ) {
+            printf("(J REF=%s NAME=%s L=%s",componentname, componentvalue,
+                    E.mirror ? LayerNames[16] : LayerNames[1] );
+            unknowncomponenttype = no;
+          }
+        }
+      }
+
+      // handle unknown component types
+      if ( ( unknowncomponenttype == yes ) || ( UseComponentTypes == no ) ) {
+        printf("(? REF=%s NAME=%s L=%s",componentname,componentvalue,
+                E.mirror ? LayerNames[16] : LayerNames[1] );
+        saypackagetype(E.package.name);
+      }
+
+      // append comment field
+      printf(")  R%03.0f X=%5.*f Y=%5.*f : ",E.angle,precision_of_nets,u2inch(E.x),
+              precision_of_nets,u2inch(E.y) );
+      printf(" Lib: %s : %s : ", E.package.library, E.package.name);
+      printf("Pins %d", pincount);
+      printf("\n");
+    }
+    printf("}\n\n");
+
+
+    // PADSTACK CREATION OF PADS, SMDS, AND VIAS
+    // create list of all the different pads and smds (vias are pads)
+    printheader("Pads, Smds, and Via Library");
+    // handle all net contacts and vias
+    B.signals(S) {
+      S.vias(V) {
+        Insert_A_Pad( ISAPAD, ISAVIA,
+                      V.shape[1], V.shape[2], V.shape[16],
+                      V.end,
+                      V.diameter[1], V.diameter[2], V.diameter[16],
+                      V.start,
+                      V.drill );
+      }
+    }
+    // handle all package pins
+    B.elements(E) {
+      E.package.contacts(C) {
+        if (C.pad) {
+          Insert_A_Pad( ISAPAD, ISAPAD,
+                        C.pad.shape[1], C.pad.shape[2], C.pad.shape[16],
+                        C.pad.angle,
+                        C.pad.diameter[1], C.pad.diameter[2], C.pad.diameter[16],
+                        C.pad.elongation,
+                        C.pad.drill );
+        }
+        else if (C.smd) {
+          if ( !C.smd.dx || !C.smd.dy) {
+            string h;
+            sprintf(h, "!<qt><nobr>Found a SMD-Pad with <b>dx</b> or <b>dy</b> = 0 (Zerro)<br>Pad <b>%s</b>'<br>Layer <b>%d</b><br>Coordinate <b>(%.4f %.4f)</b> mil<br>Package <b>%s.PAC</b><br>Element <b>%s</b><br>Library <b>%s.lbr</b><p><b>ULP aborted.</b></nobr></qt>",
+                       C.name,
+                       C.smd.layer,
+                       u2mil(C.x), u2mil(C.y),
+                       E.package.name,
+                       E.name,
+                       E.package.library
+                   );
+            dlgMessageBox( h, "OK");
+            exit(0);
+          }
+          else {
+            Insert_A_Pad( ISASMD, C.smd.layer,
+                        SmdRoundness(C.smd.roundness), 0, 0,
+                        C.smd.angle,
+                        C.smd.dx, 0, 0,
+                        C.smd.dy,
+                        0 );
+          }
+        }
+      }
+    }
+
+    // write out sorted list of the pads and smds
+    if (Total_Pads) {
+      /* *** Hyperlynx documentation *************************************
+       {PADSTACK=padstack_name, // ** maximum of 32 characters an cannot contain white space
+       [drill_size]
+       (layer_name,
+       pad_shape,    // '0' means oval or round (pad_sx=pad_sy if round)
+                     // '1' means rectangular or square (pad_sx=pad_sy if square)
+                     // '2' means oblong (oblong shape is a rectangular with rounded corners)
+       pad_sx,
+       pad_sy,
+       pad_angle,    // is the counter-clockwise rotation angle of the pad in degree;
+                     // rotation angle can range from 0.0 to +/-359.999;
+                     // valid angular resolution is 0.001 degree;
+                     // 0 (without a decimal point) is th recommended way of specifying 'no rotation'
+       [thermal_clear_shape],
+       [thermal_clear_sx],
+       [thermal_clear_sy],
+       [thermal_clear_angle],
+       [pad_type])
+      ***************************************************************** */
+
+      string s;
+      for (int i = 1; i <= Total_Pads; i++) {  // *** 17.08.2005 count from 1 ***
+        if (pad_layer[i] == 0) s = "ISAPAD";
+        if (pad_layer[i] == 1 || pad_layer[i] == 16) s = "ISASMD";
+        if (pad_layer[i] == 18) s = "ISAVIA";
+        if (pad_type[i] == ISASMD) {
+          printf("{PADSTACK=SMD%03d\n",i);   // **** 17.08.2005 alf@cadsoft.de ***
+          // smds are square, round or oblong
+
+          // * if you wish layer name for layer number remark *
+          // * this next 2 lines und mark the second 2 lines  *
+          //  printf("(%s,%d,%5.*f,%5.*f,%.1f) Shape was Smd and is now Smd\n",
+          //           LayerNames[pad_layer[i]],  // Layer name
+
+          printf("(%d,%d,%5.*f,%5.*f,%.1f) %s Shape was Smd and is now Smd\n",
+                   pad_layer[i],           // Layer number
+                   pad_shape_Top_rnds[i],
+                   precision_of_pads, u2inch(pad_diameter_Top_or_dx[i]),
+                   precision_of_pads, u2inch(pad_dy_elong_start[i]),
+                   pad_angle_end[i],
+                   s );
+        }
+        else if (pad_type[i] == ISAPAD) {
+
+          /* *** HyperLynx Signal-Integrity Transfer Format ******
+          {PADSTACK=padstack_name, [drill_size]
+          (layer_name, pad_shape, pad_sx, pad_sy, pad_angle,
+          [thermal_clear_shape],
+          [thermal_clear_sx],
+          [thermal_clear_sy],
+          [thermal_clear_angel],
+          [pad_type])              [comment]
+             ** [pad_type]!M=metal-pad A=anti-pad **
+          ******* HyperLynx Signal-Integrity Transfer Format *** */
+          printf("{PADSTACK=THR%03d,%5.3f\n", i, u2inch(pad_drill[i]));  // *** 17.08.2005 count from 1 ***
+          // pads are on all layers, and have various shapes
+          if (pad_layer[i] == ISAPAD) {
+
+            // Pad layer Top
+            if (pad_shape_Top_rnds[i] == OBLONG) {
+              printf("(1,%s,%5.*f,%5.*f,%.1f) %s Shape was %s and is now %s\n",
+                      PadShapes[pad_shape_Top_rnds[i]],
+                      precision_of_pads,u2inch(pad_diameter_Top_or_dx[i] * pad_dy_elong_start[i]),
+                      precision_of_pads,u2inch(pad_diameter_Top_or_dx[i]),
+                      pad_angle_end[i],
+                      s,
+                      EaglePadShapes[pad_shape_Top_rnds[i]],
+                      HypPadShapes[pad_shape_Top_rnds[i]] );
+            }
+            else {  // OVALROUND or RECTSQUARE
+              printf("(1,%s,%5.*f,%5.*f,%.1f) %s Shape was %s and is now %s\n",
+                      PadShapes[pad_shape_Top_rnds[i]],
+                      precision_of_pads,u2inch(pad_diameter_Top_or_dx[i]),
+                      precision_of_pads,u2inch(pad_diameter_Top_or_dx[i]),
+                      pad_angle_end[i],
+                      s,
+                      EaglePadShapes[pad_shape_Top_rnds[i]],
+                      HypPadShapes[pad_shape_Top_rnds[i]] );
+            }
+
+            // Pad layer Inner
+            printf("(MDEF,%s,%5.*f,%5.*f,0) %s\n",
+                    PadShapes[pad_shape_Inner[i]],
+                    precision_of_pads,u2inch(pad_diameter_Inner[i]),
+                    precision_of_pads,u2inch(pad_diameter_Inner[i]),
+                    s);
+
+            // Pad layer Bottom
+            if (pad_shape_Bott[i] == OBLONG) {
+              printf("(16,%s,%5.*f,%5.*f,%.1f) %s Shape was %s and is now %s\n",
+                      PadShapes[pad_shape_Bott[i]],
+                      precision_of_pads,u2inch(pad_diameter_Bott[i] * pad_dy_elong_start[i]),
+                      precision_of_pads,u2inch(pad_diameter_Bott[i]),
+                      pad_angle_end[i],
+                      s,
+                      EaglePadShapes[pad_shape_Bott[i]],
+                      HypPadShapes[pad_shape_Bott[i]]);
+            }
+            else {  // OVALROUND or RECTSQUARE
+              printf("(16,%s,%5.*f,%5.*f,%.1f) %s Shape was %s and is now %s\n",
+                      PadShapes[pad_shape_Bott[i]],
+                      precision_of_pads,u2inch(pad_diameter_Bott[i]),
+                      precision_of_pads,u2inch(pad_diameter_Bott[i]),
+                      pad_angle_end[i],
+                      s,
+                      EaglePadShapes[pad_shape_Bott[i]],
+                      HypPadShapes[pad_shape_Bott[i]]);
+            }
+          }
+
+          else if (pad_layer[i] == ISAVIA) {
+            // Top - Inner(schleife) - Bottom
+            for (int vlay = pad_dy_elong_start[i]; vlay <= pad_angle_end[i]; vlay++) {
+              // layer used and allowed?
+              if (copp_used_layer[vlay]) {    // layer used for copper an visible
+                if (vlay == 1)
+                  printf("(1,%s,%5.*f,%5.*f,0) %s Shape was %s and is now %s\n",
+                          PadShapes[pad_shape_Top_rnds[i]],
+                          precision_of_pads,u2inch(pad_diameter_Top_or_dx[i] * pad_dy_elong_start[i]),
+                          precision_of_pads,u2inch(pad_diameter_Top_or_dx[i]),
+                          s,
+                          EaglePadShapes[pad_shape_Top_rnds[i]],
+                          HypPadShapes[pad_shape_Top_rnds[i]] );
+
+                else if (vlay == 16)
+                  printf("(16,%s,%5.*f,%5.*f,0f) %s Shape was %s and is now %s\n",
+                          PadShapes[pad_shape_Bott[i]],
+                          precision_of_pads,u2inch(pad_diameter_Bott[i] * pad_dy_elong_start[i]),
+                          precision_of_pads,u2inch(pad_diameter_Bott[i]),
+                          s,
+                          EaglePadShapes[pad_shape_Top_rnds[i]],
+                          HypPadShapes[pad_shape_Top_rnds[i]] );
+
+                else  printf("(%d,0,%5.*f,%5.*f,0) %s always round in inner layer\n",
+                        vlay,
+                        precision_of_pads,u2inch(pad_diameter_Inner[i]),
+                        precision_of_pads,u2inch(pad_diameter_Inner[i]),
+                        s );
+              }
+            }
+          }
+        }
+        printf("}\n\n");
+      }
+    }
+
+    // SIGNALS
+    printheader("Nets");
+    int Pad_ID, Xpad, Ypad, EpadX, EpadY, TLaylimit, Blaylimit;
+    B.signals(S) {
+      printf("{NET=%s\n",S.name);
+      S.contactrefs(C) {
+
+        if (C.contact.pad) {
+          Pad_ID = Find_A_Pad( ISAPAD, 0,
+                              C.contact.pad.shape[1], C.contact.pad.shape[2], C.contact.pad.shape[16],
+                              C.contact.pad.angle,
+                              C.contact.pad.diameter[1], C.contact.pad.diameter[2], C.contact.pad.diameter[16],
+                              C.contact.pad.elongation,
+                              C.contact.pad.drill );
+          if ( Pad_ID ) { // *** 17.08.2005 Pad count from 1 to total_pad ***
+            Xpad = C.contact.pad.x;
+            EpadX = Xpad;
+            Ypad = C.contact.pad.y;
+            EpadY = Ypad;
+            TLaylimit = 1;
+            Blaylimit = 16;
+            printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=THR%03d",
+                  precision_of_nets,u2inch(Xpad), precision_of_nets,u2inch(Ypad),
+                  C.element.name, C.contact.pad.name, Pad_ID);  // ** correct number while listing count from 1
+                                                                // ** 17.08.2005 alf@cadsoft.de ***
+
+            SayUPinFunction( C.element.name, C.contact.pad.name );
+            printf(") %s, Pad Diameter: %5.*f  Drill: %5.*f\n",
+                  S.name, precision_of_nets, u2inch(C.contact.pad.diameter[16]),
+                  precision_of_nets, u2inch(C.contact.pad.drill) );
+          }
+          else {
+            printf("Unregistered Pin Size!\n");
+          }
+        }
+        if (C.contact.smd) {
+          Pad_ID = Find_A_Pad( ISASMD, C.contact.smd.layer,
+                               SmdRoundness(C.contact.smd.roundness), 0, 0,
+                               C.contact.smd.angle,
+                               C.contact.smd.dx, 0, 0,
+                               C.contact.smd.dy,
+                               0 );
+          if ( Pad_ID ) {  // *** 17.08.2005 count from 1 ***
+            Xpad = C.contact.smd.x;
+            EpadX = Xpad;
+            Ypad = C.contact.smd.y;
+            EpadY = Ypad;
+            TLaylimit = C.contact.smd.layer;
+            Blaylimit = C.contact.smd.layer;
+            printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=SMD%03d",
+                     precision_of_nets,u2inch(Xpad), precision_of_nets,u2inch(Ypad),
+                     C.element.name, C.contact.smd.name, Pad_ID);  // ** correct number while listing count from 1
+                                                                   // ** 17.08.2005 alf@cadsoft.de ***     SayUPinFunction( C.element.name, C.contact.smd.name );
+            printf(") %s, Smd Dx: %5.*f  Dy: %5.*f\n",
+                    S.name, precision_of_nets, u2inch(C.contact.smd.dx),
+                    precision_of_nets, u2inch(C.contact.smd.dy) );
+          }
+          else {
+            printf("Unregistered Smd Size!\n");
+          }
+        }
+        // if a pad/smd was located for this contact
+        // and a copper segment starts at this contact's x,y location,
+        // then the copper segment is included on this net.
+        if ( Pad_ID ) { // *** 17.08.2005 count from 1 ***
+          // Package element copper information
+          // circles
+          C.element.package.circles(A) {
+            if ( ( A.layer >= 1 ) && ( A.layer <= 16 ) ) {
+                printf("* %s has metal circles or isolation circles\n",C.element.name);
+            }
+          }
+          // polygons
+          C.element.package.polygons(P) {
+            if ( ( P.layer >= 1 ) && ( P.layer <= 16 ) ) {
+               printf("* %s has metal polygons\n",C.element.name);
+            }
+          }
+          // rectangles
+          C.element.package.rectangles(R) {
+            if ( ( R.layer >= 1 ) && ( R.layer <= 16 ) ) {
+              printf("* %s has metal rectangles\n",C.element.name);
+            }
+          }
+          // Find any wires that connect to this pin/pad that are internal to the package
+          // 1. build a table of all wires on the accepted layer
+          int AnyPackageWiresCount = 0;
+          int Wx1[], Wy1[], Wx2[], Wy2[], Wwid[], Wusedflag[],
+              Wcurve[], Warcx1[], Warcx2[], Warcxc[], Warcy1[], Warcy2[], Warcyc[], Warcradius[],
+              Wlayer ;
+          C.element.package.wires(W) {
+            // find all wires on the correct layer.
+            if ( ( W.layer >= TLaylimit ) && ( W.layer <= Blaylimit ) ) {
+              Wx1[AnyPackageWiresCount] = W.x1;
+              Wy1[AnyPackageWiresCount] = W.y1;
+              Wx2[AnyPackageWiresCount] = W.x2;
+              Wy2[AnyPackageWiresCount] = W.y2;
+              Wwid[AnyPackageWiresCount] = W.width;
+              Wcurve[AnyPackageWiresCount] = W.curve;
+              if (W.curve) {                               // 21.04.2005 alf@cadsoft.de
+                Warcx1[AnyPackageWiresCount] = W.arc.x1;
+                Warcx2[AnyPackageWiresCount] = W.arc.x2;
+                Warcxc[AnyPackageWiresCount] = W.arc.xc;
+                Warcy1[AnyPackageWiresCount] = W.arc.y1;
+                Warcy2[AnyPackageWiresCount] = W.arc.y2;
+                Warcyc[AnyPackageWiresCount] = W.arc.yc;
+                Warcradius[AnyPackageWiresCount] = W.arc.radius;
+              }
+              Wusedflag[AnyPackageWiresCount] = no;
+              TLaylimit = W.layer;    // fix layer to first found layer on an accepted first layer
+              Blaylimit = W.layer;    // fix layer to first found layer on an accepted first layer
+              Wlayer = W.layer;       // fix the layer
+              AnyPackageWiresCount++; // count one segment
+            }
+          }
+          // 2. search for physically connected copper segments, even if out of order
+          if ( AnyPackageWiresCount != 0 ) {
+            for ( int woi = 0; woi < AnyPackageWiresCount; woi++ ) {
+              if ( Wusedflag[woi] == no ) {
+                // check either end of the segment
+                if ( ( Wx1[woi] == Xpad ) && ( Wy1[woi] == Ypad ) ) {
+                  Xpad = Wx2[woi]; // remember the end of this segment
+                  Ypad = Wy2[woi]; // which must be the start of the next segment
+                  Wusedflag[woi] = yes;
+                  woi = 0; // start searching list from the beginning again
+                }
+                else if ( ( Wx2[woi] == Xpad ) && ( Wy2[woi] == Ypad ) ) {
+                  Xpad = Wx1[woi]; // remember the end of this segment
+                  Ypad = Wy1[woi]; // which must be the start of the next segment
+                  Wusedflag[woi] = yes;
+                  woi = 0; // start searching list from the beginning again
+                }
+              }
+            }
+          }
+          // 3. write out all segments attached to the contact
+          if ( AnyPackageWiresCount != 0 ) {
+            for ( int woi = 0; woi < AnyPackageWiresCount; woi++ ) {
+              if ( Wusedflag[woi] == yes ) {
+                // write the segment
+                if ( Wlayer >= 1 && Wlayer <= 16 ) {
+                  if (Wcurve[woi]) {
+                    printf("(PERIMETER_ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f  W=%5.*f L=%s) Arcs: Board Outline Arc is CCW\n",
+                             precision_of_nets,u2inch(Warcx1[woi]), precision_of_nets,u2inch(Warcy1[woi]),
+                             precision_of_nets,u2inch(Warcx2[woi]), precision_of_nets,u2inch(Warcy2[woi]),
+                             precision_of_nets,u2inch(Warcxc[woi]), precision_of_nets,u2inch(Warcyc[woi]),
+                             precision_of_nets,u2inch(Warcradius[woi]),
+                             precision_of_nets,u2inch(Wwid[woi]),
+                             LayerNames[Wlayer]  );
+                  }
+                  else {
+                    printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) %s Internal Package Wire\n",
+                          precision_of_nets,u2inch(Wx1[woi]),
+                          precision_of_nets,u2inch(Wy1[woi]),
+                          precision_of_nets,u2inch(Wx2[woi]),
+                          precision_of_nets,u2inch(Wy2[woi]),
+                          precision_of_nets,u2inch(Wwid[woi]),
+                          LayerNames[Wlayer],
+                          S.name);
+                  }
+                }
+                // write any contact pins or smds
+                int OtherPad_ID;
+                C.element.package.contacts(Q) {
+                  // don't write out contacts at the original element contact location
+                  if ( ( Q.x != EpadX ) || ( Q.y != EpadY ) ) {
+                    // check if this element contact is at either end of the wire segment
+                    if ( ( ( Q.x == Wx1[woi] ) && ( Q.y == Wy1[woi] ) ) ||
+                         ( ( Q.x == Wx2[woi] ) && ( Q.y == Wy2[woi] ) ) ) {
+                      // if a through hole pad
+                      if (Q.pad) {
+                        // find a pad on any layer
+                        OtherPad_ID = Find_A_Pad( ISAPAD, 0,
+                                                  Q.pad.shape[1], Q.pad.shape[2], Q.pad.shape[16],
+                                                  Q.pad.angle,
+                                                  Q.pad.diameter[1], Q.pad.diameter[2], Q.pad.diameter[16],
+                                                  Q.pad.elongation,
+                                                  Q.pad.drill );
+                        if ( OtherPad_ID ) {  // *** 17.08.2005 count from 1 ***
+                          printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=THR%03d",
+                                   precision_of_nets, u2inch(Q.pad.x), precision_of_nets, u2inch(Q.pad.y),
+                                   C.element.name, Q.pad.name, OtherPad_ID);
+                          SayUPinFunction( C.element.name, Q.pad.name );
+                          printf(") %s, Internal Package Pad Diameter: %5.*f  Drill: %5.*f\n",
+                                   S.name, precision_of_nets,u2inch(Q.pad.diameter[16]),
+                                   precision_of_nets, u2inch(Q.pad.drill) );
+                          InsertAssocatedPin( C.element.name, Q.pad.name );
+                        }
+                        else {
+                          printf("Unregistered Internal Package Pin Size!\n");
+                        }
+                      }
+                      // if a smd pad
+                      if (Q.smd) {
+                        // smd pad must be on this layer
+                        if ( Q.smd.layer == Wlayer ) {
+                          // find a smd that matches
+                          OtherPad_ID = Find_A_Pad( ISASMD, Q.smd.layer,
+                                                    SmdRoundness(Q.smd.roundness), 0, 0,
+                                                    Q.smd.angle,
+                                                    Q.smd.dx, 0, 0,
+                                                    Q.smd.dy,
+                                                    0 );
+                          if ( OtherPad_ID ) { // *** 17.08.2005 count from 1 ***
+                            printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=SMD%03d",
+                                     precision_of_nets,u2inch(Q.smd.x), precision_of_nets,u2inch(Q.smd.y),
+                                     C.element.name, Q.smd.name, OtherPad_ID);
+                            SayUPinFunction( C.element.name, Q.smd.name );
+                            printf(") %s, Smd Dx: %5.*f  Dy: %5.*f\n",
+                                     S.name,precision_of_nets,u2inch(Q.smd.dx),
+                                     precision_of_nets,u2inch(Q.smd.dy) );
+                            InsertAssocatedPin( C.element.name, Q.smd.name );
+                          }
+                          else {
+                            printf("Unregistered Smd Size!\n");
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      S.vias(V) {
+        Pad_ID = Find_A_Pad( ISAPAD, 18,
+                             V.shape[1], V.shape[2], V.shape[16],
+                             V.end,
+                             V.diameter[1], V.diameter[2], V.diameter[16],
+                             V.start,
+                             V.drill );
+
+        if ( Pad_ID ) { // 17.08.2005 count from 1 ***
+          printf("(VIA X=%5.*f Y=%5.*f P=THR%03d) %s\n",
+                  precision_of_nets,u2inch(V.x), precision_of_nets, u2inch(V.y),
+                  Pad_ID, S.name);   // ** correct number while listing count from 1
+                                       // ** 17.08.2005 alf@cadsoft.de ***
+        }
+        else {
+          printf("Unregistered Via Size!\n");
+        }
+      }
+      S.wires(W) {
+        if (W.layer >= 1 && W.layer <= 16 ) {
+          if (W.curve) {
+            printf("(ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f W=%5.*f L=%s)\n",
+                    precision_of_nets,u2inch(W.arc.x1), precision_of_nets,u2inch(W.arc.y1),
+                    precision_of_nets,u2inch(W.arc.x2), precision_of_nets,u2inch(W.arc.y2),
+                    precision_of_nets,u2inch(W.arc.xc), precision_of_nets,u2inch(W.arc.yc),
+                    precision_of_nets,u2inch(W.arc.radius),
+                    precision_of_nets,u2inch(W.width),
+                    LayerNames[W.layer]  );
+          }
+          else {
+            printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) %s\n",
+                    precision_of_nets,u2inch(W.x1), precision_of_nets,u2inch(W.y1),
+                    precision_of_nets,u2inch(W.x2), precision_of_nets,u2inch(W.y2),
+                    precision_of_nets,u2inch(W.width), LayerNames[W.layer], S.name);
+          }
+        }
+      }
+      S.polygons(P) {
+        printf("* POLYGONS   NOT Allowed in HYP as of BoardSimm 2.2 Build 70.  ");
+        printf("Hopefully someday they will!\n");
+        printf("* I=Isolate S=Spacing W=Width O=Orphins_On/Off P=Pour_SOLID/HATCH T=Thermals_On/Off L=Layer) Polygon Format\n");
+        printf("*(PLG I=%5.*f S=%5.*f W=%5.*f O=%s P=%s T=%s L=%s) Polygon %s Data\n",
+                precision_of_nets,u2inch(P.isolate),precision_of_nets,u2inch(P.spacing),
+                precision_of_nets,u2inch(P.width),P.orphans ? "On" : "Off",
+                P.pour == POLYGON_POUR_SOLID ? "SOLID" : "HATCH",
+                P.thermals ? "On" : "Off",LayerNames[P.layer],S.name);
+        P.wires(W) {
+          printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Polygon %s\n",
+                precision_of_nets,u2inch(W.x1),precision_of_nets,u2inch(W.y1),
+                precision_of_nets,u2inch(W.x2),precision_of_nets,u2inch(W.y2),
+                precision_of_nets,u2inch(W.width),LayerNames[W.layer],S.name);
+        }
+      }
+      printf("}\n\n");
+    }
+
+    // Unconnected Component Pins are on their own special net "HYP$xPy"
+    // where x=element name and y=pin name
+
+    // handle all unconnected package pins
+    B.elements(E) {
+      E.package.contacts(C) {
+        if ( strlen(C.signal) == 0 ) {
+          if (C.pad) {
+            Pad_ID = Find_A_Pad( ISAPAD, 0,
+                                 C.pad.shape[1], C.pad.shape[2], C.pad.shape[16],
+                                 C.pad.angle,
+                                 C.pad.diameter[1], C.pad.diameter[2], C.pad.diameter[16],
+                                 C.pad.elongation,
+                                 C.pad.drill );
+            if ( Pad_ID ) { // *** 17.08.2005 count from 1 ***
+              if ( FindAssocatedPin( E.name, C.pad.name ) == 0 ) {
+                Xpad = C.pad.x;
+                Ypad = C.pad.y;
+                printf("{NET=HYP$%s.%s\n",E.name,C.pad.name);
+                printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=THR%03d",
+                       precision_of_nets,u2inch(Xpad), precision_of_nets,u2inch(Ypad),
+                       E.name, C.pad.name, Pad_ID);
+                printf(") Pad Diameter: %5.*f  Drill: %5.*f\n",
+                       precision_of_nets, u2inch(C.pad.diameter[16]),
+                       precision_of_nets, u2inch(C.pad.drill) );
+                printf("}\n\n");
+              }
+              else {
+                printf("* PIN %s.%s is part of an internal package net.\n",E.name,C.pad.name);
+              }
+            }
+            else {
+              printf("* Unregistered Pin Size!\n");
+            }
+          }
+          if (C.smd) {
+            Pad_ID = Find_A_Pad( ISASMD, C.smd.layer,
+                                 SmdRoundness(C.smd.roundness), 0, 0,
+                                 C.smd.angle,
+                                 C.smd.dx, 0, 0,
+                                 C.smd.dy,
+                                 0 );
+            if ( Pad_ID ) { // *** 17.08.2005 count from 1 ***
+              if ( FindAssocatedPin( E.name, C.smd.name ) == 0 ) {
+                Xpad = C.smd.x;
+                Ypad = C.smd.y;
+                printf("{NET=HYP$%s.%s\n",E.name,C.smd.name);
+                printf("(PIN X=%5.*f Y=%5.*f R=%s.%s P=SMD%03d",
+                      precision_of_nets,u2inch(Xpad), precision_of_nets,u2inch(Ypad),
+                      E.name, C.smd.name, Pad_ID);
+                printf(") Smd Dx: %5.*f  Dy: %5.*f\n",
+                      precision_of_nets, u2inch(C.smd.dx),
+                      precision_of_nets, u2inch(C.smd.dy) );
+                printf("}\n\n");
+              }
+              else {
+                printf("* PIN %s.%s is part of an internal package net.\n",E.name,C.smd.name);
+              }
+            }
+            else {
+              printf("* Unregistered Smd Size!\n");
+            }
+          }
+        }
+      }
+    }
+
+    // NETS that aren't signals but are copper are exported as a net named "N$ComNet"
+    // Search for any common nets
+    int AnyNets = no;
+    // B.arcs(A) if ( ( A.layer >= 1 ) && ( A.layer <= 16 ) ) AnyNets = yes;
+    B.circles(C) if ( ( C.layer >= 1 ) && ( C.layer <= 16 ) ) AnyNets = yes;
+    B.rectangles(R) if ( ( R.layer >= 1 ) && ( R.layer <= 16 ) ) AnyNets = yes;
+    B.wires(W) if ( ( W.layer >= 1 ) && ( W.layer <= 16 ) ) AnyNets = yes;
+
+    if ( AnyNets == yes ) {
+      printf("{NET=N$ComNet\n");
+
+      // CIRCLES
+      B.circles(C) {
+        if ( ( C.layer >= 1 ) && ( C.layer <= 16 ) ) {
+          printf("(ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f W=%5.*f L=%s) Circle\n",
+                   precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                   precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y+C.radius),
+                   precision_of_nets,u2inch(C.x),precision_of_nets,u2inch(C.y),
+                   precision_of_nets,u2inch(C.radius),precision_of_nets,u2inch(C.width),
+                   LayerNames[C.layer]);
+        }
+      }
+
+      // RECTANGLES
+      B.rectangles(R) {
+        if ( ( R.layer >= 1 ) && ( R.layer <= 16 ) ) {
+          printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Rectangle Segment Bottom\n",
+                   precision_of_nets,u2inch(R.x1),precision_of_nets,u2inch(R.y1),
+                   precision_of_nets,u2inch(R.x2),  precision_of_nets,u2inch(R.y1),
+                   precision_of_nets,RectOutlineWireWidth,LayerNames[R.layer]);
+          printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Rectangle Segment Right\n",
+                   precision_of_nets,u2inch(R.x2),precision_of_nets,u2inch(R.y1),
+                   precision_of_nets,u2inch(R.x2),precision_of_nets,u2inch(R.y2),
+                   precision_of_nets,RectOutlineWireWidth,LayerNames[R.layer]);
+          printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Rectangle Segment Top\n",
+                   precision_of_nets,u2inch(R.x2),precision_of_nets,u2inch(R.y2),
+                   precision_of_nets,u2inch(R.x1),precision_of_nets,u2inch(R.y2),
+                   precision_of_nets,RectOutlineWireWidth,LayerNames[R.layer]);
+          printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Rectangle Segment Left\n",
+                   precision_of_nets,u2inch(R.x1),precision_of_nets,u2inch(R.y2),
+                   precision_of_nets,u2inch(R.x1),precision_of_nets,u2inch(R.y1),
+                   precision_of_nets,RectOutlineWireWidth,LayerNames[R.layer]);
+        }
+      }
+
+      // WIRES
+      B.wires(W) {
+        if ( ( W.layer >= 1 ) && ( W.layer <= 16 ) ) {
+          if (W.curve) {
+            // ARCS
+            printf("(ARC X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f XC=%5.*f YC=%5.*f R=%5.*f W=%5.*f L=%s) Arc is CCW\n",
+                    precision_of_nets,u2inch(W.arc.x2),precision_of_nets,u2inch(W.arc.y2),
+                    precision_of_nets,u2inch(W.arc.x1),precision_of_nets,u2inch(W.arc.y1),
+                    precision_of_nets,u2inch(W.arc.xc),precision_of_nets,u2inch(W.arc.yc),
+                    precision_of_nets,u2inch(W.arc.radius),precision_of_nets,u2inch(W.width),
+                    LayerNames[W.layer]);
+          }
+          else {
+            printf("(SEG X1=%5.*f Y1=%5.*f X2=%5.*f Y2=%5.*f W=%5.*f L=%s) Wire Segment\n",
+                    precision_of_nets,u2inch(W.x1),precision_of_nets,u2inch(W.y1),
+                    precision_of_nets,u2inch(W.x2),precision_of_nets,u2inch(W.y2),
+                    precision_of_nets,u2inch(W.width),LayerNames[W.layer]);
+          }
+        }
+      }
+      printf("}\n\n");
+    } // end of copper as common net
+
+    // END OF RUN
+    printheader("End of data");
+    printf("{END}\n\n");
+    printf("{KEY=028-015E-4E5D}\n\n");
+  } // end of output() {}
+
+} // end of board() {}
+
+

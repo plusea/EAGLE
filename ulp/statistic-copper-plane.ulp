@@ -1,0 +1,532 @@
+#usage "<b>Statisic of copper</b><p>\n"
+       "Create and evaluate bitmap(s) to calculate the copper area of layers."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string info_en = ";<qt><nobr>Be sure that there are <b>no elements outside the " +
+                 "board contour</b> which is drawn in layer 20, <i>Dimension</i>.<br>" +
+                 "Otherwise it may come to incorrect results.<p> " +
+                 "Calculating the board area:<br>" +
+                 "Holes and other kinds of openings will not be taken into consideration.<br>" +
+                 "Calculating copper areas:<br>" +
+                 "Blind and buried vias will not be marked in the reference image as it is " +
+                 "the case with drills and holes.<br>This leads to slight inaccuracies in the result.</qt>";
+
+
+string info_de = ";<qt><nobr>Bei Benutzung dieses ULPs darf <b>kein Element ausserhalb</b> "+
+                 "des <b>Platinenumrisses</b> im<br>Layer 20 <i>Dimension</i> " +
+                 "gezeichnet sein. Andernfalls kommt es zu fehlerhaften Ergebnissen.<p>" +
+                 "Berechnung der Platinenfl채che:<br>" +
+                 "Bohrungen und Durchbr체che innerhalb der Platine werden nicht ber체cksichtigt.<br>" +
+                 "Berechnung der Kupferfl채che:<br>"+
+                 "Bei Verwendung von Blind- und Burried-Vias werden im Referenzbild die Bohrungen<br>" +
+                 "nicht wie bei Pads und Holes markiert, wodurch es zu minimalen Ungenauigkeiten<br>" +
+                 "im Ergebnis kommen kann.</qt>";
+
+
+
+
+string infotext = info_en;
+if (language() == "de") infotext = info_de;
+
+string MSG_en_de[] = {
+  "en\v"
+  "de\v"
+  ,
+  "Statistics\v"
+  "Statistik\v"
+  ,
+  "Delete temporary files (bitmaps)?\v"
+  "Tempor채re Dateien (Bitmaps) l철schen?\v"
+  ,
+  "Layer\tplane (Cu)\t% Cu\v"
+  "Layer\tFl채che (Cu)\t% Cu\v"
+  ,
+  "Statistics Copper Area:\v"
+  "Statistik Kupferfl채chen:\v"
+  ,
+  "+Ok\v"
+  "+Ok\v"
+  ,
+  "-Cancel\v"
+  "-Abbrechen\v"
+  ,
+  "+Yes\v"
+  "+Ja\v"
+  ,
+  "-No\v"
+  "-Nein\v"
+  ,
+  "&Save\v"
+  "&Speichern\v"
+  ,
+  "Start this ULP from a Board!\v"
+  "Starten sie das ULP in einem Board!\v"
+  ,
+  "Calculate board area\v"
+  "Berechnen der Platinen-Fl채che(n)\n"
+  ,
+  "Only board area\v"
+  "Nur Platinenfl채che\v"
+  ,
+  "Also copper layers\v"
+  "Auch Kupferlayer\v"
+  ,
+  "Save statistic\v"
+  "Statistik speichern\v"
+  "\v"
+  "\v"
+  };
+
+int Language = strstr(MSG_en_de[0], language()) / 2;
+string tr(string s) {
+  string t = lookup(MSG_en_de, s, Language, '\v');
+  return t ? t : s;
+}
+
+
+string UlpVersion = "1.0.1"; // 2010-05-04 alf@cadsoft.de - get current background color
+
+string brdfile;
+int    cntlayerfiles;
+
+string fileBitmap;
+int    resolution = 254;              // resolution pixel per inch
+real   pmm2 = (25.4/resolution) * (25.4/resolution);
+
+int    nBytes = 0;                    // count bytes of file (fileName)
+int    ColorBits = 0;                 // used bits for color
+int    AdrStart, AdrEnd = 0;          // Start & End of BITMAP-Data
+int    length = 0;                    // length of bmp-Data
+int    Byte4Group = 0;                // bmp-Data organized as 4-byte groups
+char   c[];
+
+real   brd_mm2;
+int    p2[];                          // pixel quadrat pro layer
+int    BackgroundColor;
+int    L_dimension[];                 // Left dimension of pixel line
+int    R_dimension[];                 // Right dimension of pixel line
+
+int    Y = 0;                         // count pixels y
+int    X = 0;                         // count pixels x
+
+char   copper = 'C';                  // reference copper flag
+char   nonecopper = 'N';              // reference none-copper flag (holes/drills)
+char   nopcb = copper -1;             // reference no printed-circuit-board (outside)
+char   Bit[] = { nonecopper, copper };
+string planeBit0[];                   // byte (character) array for pcb plane
+int    mBit[];
+string info;
+
+
+string Header;
+int    nsl = 0;
+numeric string plane_statistic[];
+
+int    fill_drilllayer = 199;
+string fill_drill_name  = "FillDrill";
+string cmd, h;
+string ldisplay;                         // reset display layers
+
+
+void wait(int w) {
+    int t = time();
+    do {
+    } while (t+w > time());
+  return;
+}
+
+// ** delete temporary circles and layer **
+string remove_layer(int x1, int y1, int x2, int y2) {
+  string s;
+  sprintf(s, "DISPLAY NONE %d;\nGROUP (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\nDELETE (>%.4f %.4f);\nLAYER -%d;\nGRID LAST;\n",
+              fill_drilllayer,
+              u2mm(x1), u2mm(y1),
+              u2mm(x2), u2mm(y1),
+              u2mm(x2), u2mm(y2),
+              u2mm(x1), u2mm(y2),
+              u2mm(x1), u2mm(y1),
+              u2mm(x1)+1, u2mm(y1)+1, fill_drilllayer );
+  return s;
+}
+
+string  center(int x, int y, int drill) {
+  string s;
+  sprintf(s, "circle 0 (%.4f %.4f) (%.4f %.4f) ;\n",
+              u2mm(x), u2mm(y), u2mm(x) + u2mm(drill)/2, u2mm(y) );
+  return s;
+}
+
+
+// ** calculate left and right side **
+void PCB_planeColom(int Line) {
+  int pixel2, z;
+  BackgroundColor = mBit[0];
+  int Copper = 0;
+  int Dimension = 0;
+  int copper_cnt;
+  int zL, zR;
+
+  for(z = 0; z <= X; z++) {
+    planeBit0[Line][z] = Bit[mBit[z]];
+  }
+  for( zL = 0; zL < X; zL++) {
+    if(mBit[zL] != BackgroundColor) {
+      L_dimension[Line] = zL;
+      break;
+    }
+  }
+  for( zR = X; zR >= 0; zR--) {
+    if(mBit[zR] != BackgroundColor) {
+      R_dimension[Line] = zR;
+      break;
+    }
+  }
+  return;
+}
+
+// ** define outside dimension **
+// ** set flag in pcb array    **
+int  PCB_planeRow(void) {
+  status("Mark right and left outline");
+  int y, x;
+  // * mark from left and from right do dimension *
+  for ( y = 0; y <= Y; y++) {
+    if (L_dimension[y]) {
+      for( x = 0; x < X; x++) {
+        if(planeBit0[y][x] != copper) break;
+        else planeBit0[y][x]--;     // mark pcb outside from left side
+      }
+      for( x = X; x > 0; x--) {
+        if(planeBit0[y][x] != copper) break;
+        else planeBit0[y][x]--;     // mark pcb outside from right side
+      }
+    }
+  }
+  status("Mark top and bottom outline");
+  // * mark from top and from bottom to dimension *
+  for ( x = 0; x <= X; x++) {
+    for( y = 0; y < Y; y++) {
+      if(planeBit0[y][x] != copper) break;
+      else  planeBit0[y][x]--;     // mark pcb outside from bottom side
+    }
+    for( y = Y; y > 0; y--) {
+      if(planeBit0[y][x] != copper) break;
+      else planeBit0[y][x]--;     // mark pcb outside from top side
+    }
+  }
+  status("calculate board area");
+  int pp2; // count pcb area pixel
+  for (y = 0; y < Y; y++) {
+    for (x = L_dimension[y]; x < R_dimension[y]; x++ ) {
+      if (planeBit0[y][x] != nopcb) pp2++;              // komplete pcb plane
+    }
+  }
+  return pp2;
+}
+
+
+int calculateLine(int Line, int layer) {
+  string m;
+  sprintf(m, "Layer %d: Line %d of %d", layer, Line, Y);
+  status(m);
+  int pixel2, x;
+  BackgroundColor = mBit[1];
+  int Copper = 0;
+  int Dimension = 0;
+  if (!layer) {
+    PCB_planeColom(Line);
+  }
+  else {
+    for( x = L_dimension[Line]; x <= R_dimension[Line]; x++) {
+      if(mBit[x] != BackgroundColor && planeBit0[Line][x] == copper) pixel2++;
+    }
+  }
+  return pixel2;
+}
+
+
+void get_pixel_info( int layer) {
+  int xByte = 4 * Byte4Group;
+  int bmpBits;
+  for(int yRead = 0; yRead <= Y; yRead++) {
+    for(int xRead = 0; xRead < xByte; xRead ++) {
+      bmpBits = c[AdrStart + yRead * xByte + xRead];
+      switch (ColorBits) {
+        case  1 :  for(int bitcnt = 7; bitcnt > -1; bitcnt--) {
+                     mBit[(xRead * 8) + (7 - bitcnt)] = bmpBits;
+                     mBit[(xRead * 8) + (7 - bitcnt)] >>= bitcnt;
+                     mBit[(xRead * 8) + (7 - bitcnt)] &= 0X1;
+                   }
+                   break;
+
+        case  4 :  dlgMessageBox("16 colors, not accepted!", "OK");
+                   exit(-4);
+                   mBit[xRead * 2 ] = bmpBits;
+                   mBit[xRead * 2 + 1] = bmpBits;
+                   mBit[xRead * 2 ] >>= 4;
+                   mBit[xRead * 2 + 1] &= 0x0f;
+                   break;
+
+        case  8 :  dlgMessageBox("256 colors, not accepted!", "OK");
+                   exit(-8);
+                   mBit[xRead] = bmpBits;
+                   break;
+      }
+    }
+    p2[layer] += calculateLine(yRead, layer);
+  }
+  // ** calculate array outside outlines **
+  if (!layer) {
+    p2[0] = PCB_planeRow();  // calculate area outside dimension line
+  }
+  return;
+}
+
+
+
+// generate bitmaps and start this ulp again
+void genereate_bitmaps(UL_BOARD B) {
+  status("Generate return script, please wait!");
+
+  string cmd, l, lfill, h;
+  string ratsnest = "RATSNEST;\n";
+  B.signals(S) {
+    if (ratsnest) {
+      S.polygons(P) {
+        if (ratsnest) {
+          P.fillings(F) {
+            ratsnest ="";
+            break;
+          }
+        }
+        else break;
+      }
+    }
+    else break;
+  }
+  cmd += ratsnest;
+
+  int cntlayer = 2;
+  sprintf(h, "GRID mm;\nLAYER %d %s;\nCHANGE Layer %d;\n", fill_drilllayer, fill_drill_name, fill_drilllayer);
+  cmd += h;
+
+  // ** temporary fill drills with circle **
+  B.holes(L) {
+    cmd += center(L.x, L.y, L.drill);
+  }
+  B.elements(E) {
+    E.package.holes(H) {
+      cmd += center(H.x, H.y, H.drill);
+    }
+    E.package.contacts(C) {
+      if (C.pad) {
+        cmd += center(C.pad.x, C.pad.y, C.pad.drill);
+      }
+    }
+  }
+  string fvs;
+  B.signals(S) {
+    if (cntlayer > 2) break;
+    S.vias(V) {
+      fvs += center(V.x, V.y, V.drill);
+      if (V.start > 1 || V.end < 16) cntlayer ++;
+      if (cntlayer > 2) break;
+    }
+  }
+  if (cntlayer < 3) {
+    cmd += fvs;
+  }
+
+  sprintf(h, "SET FILL_LAYER 17 1;\nSET FILL_LAYER 18 1;\nSET FILL_LAYER 20 1;\nDISPLAY NONE 20 %d;\nEXPORT IMAGE '%s_0.bmp' MONOCHROME %d;\n",
+              fill_drilllayer, brdfile, resolution);
+  cmd += h;
+
+  // sprintf(h, "%s_0.bmp", brdfile);
+  // output( h, "wtD");    // temporary file, delete if eagle closed
+
+  int allcupperlayer = dlgDialog(tr("Statistic")) {
+    dlgLabel(tr("Calculate board area"));
+    dlgPushButton( tr("Also copper layers")) dlgAccept();
+    dlgPushButton( tr("Only board area")) dlgReject();
+  };
+  if (allcupperlayer) {
+    B.layers(L) {
+      if (L.number >= 1 && L.number <= 16) {
+        if (L.used) {
+          sprintf(h, "SET FILL_LAYER %d 1;\nDISPLAY NONE %d 17 18;\nEXPORT IMAGE '%s_%d.bmp' MONOCHROME %d;\n",
+                       L.number, L.number, brdfile, L.number, resolution);
+          l += h;
+          sprintf(h, "SET FILL_LAYER %d %d;\n", L.number, L.fill);
+          lfill += h;
+          // sprintf(h, "%s_%d.bmp", brdfile, L.number);
+          // output( h, "wtD");    // temporary file, delete if eagle close
+        }
+      }
+      if (L.number == 17 || L.number == 18) {
+         sprintf(h, "SET COLOR_LAYER %d %d;\nSET FILL_LAYER %d %d;\n", L.number, L.color, L.number, L.fill);
+         lfill += h;
+      }
+    }
+  }
+  if (l) {
+    cmd += "SET COLOR_LAYER 17 0;\nSET COLOR_LAYER 18 0;\n" + l;  // set color Via layer to 0 (black)
+  }
+
+  ldisplay = "DISPLAY NONE ";
+  B.layers(L) {
+    if (L.visible) {
+      sprintf( h, " %d", L.number);
+      ldisplay += h;
+    }
+  }
+
+  cmd += lfill;                 // restore layer filling
+  sprintf(h, "RUN '%s' 1;\n", argv[0]);
+  cmd += h;
+  cmd += remove_layer( B.area.x1, B.area.y1, B.area.x2, B.area.y2);
+  cmd += ldisplay + ";\n";         // restore layer display
+  status("EXPORT bitmaps, please wait!");
+  exit(cmd);
+}
+
+
+
+// ** read bitmap file **
+void pixel_map(string f) {
+    nBytes = fileread(c, f);              // read file in array
+    int point     = strstr( f, ".bmp");
+    int underline = strstr( f, "_", point-4);
+    int layer     = strtol(strsub(f, underline+1, point-underline));
+    if (!layer) {
+      // up to 31 bytes - not all used
+      if(c[0] != 'B') {
+        dlgMessageBox(f + ":\nis not a bmp file.\n\nist keine bmp-Datei.", "OK");
+        exit(0);
+      }
+      if(c[1] != 'M') {
+        dlgMessageBox(f + ":\nis not a bmp file.\n\nist keine bmp-Datei.", "OK");
+        exit(0);
+      }
+      if(c[21] > 0) {
+        dlgMessageBox(f + ":\nToo many pixels in x direction\n"
+                              + "\nAnzahl der Pixel in X zu gross\n", "OK");
+        exit (0);
+      }
+      if(c[25] > 0) {
+        dlgMessageBox(f + ":\nToo many pixels y direction\n"
+                               + "\nAnzahl der Pixel in Y zu gross\n", "OK");
+        exit (0);
+      }
+      ColorBits = c[28];               // counter of ColorBits
+      if(ColorBits > 1) {
+        dlgMessageBox("falsche Farbtiefe", "OK");
+        exit(0);
+      }
+
+      AdrEnd  = c[2] + c[3]  * 256 + c[4]  * 256 * 256 +  c[5] * 256 * 256 * 256;
+      AdrStart = c[10]+ c[11] * 256 + c[12] * 256 * 256 + c[13] * 256 * 256 * 256;
+      X = (c[18] + c[19] * 256 + c[20] * 65536 + c[21] * 256 * 256 * 256) - 1;
+      Y = (c[22] + c[23] * 256 + c[24] * 65536 + c[25] * 256 * 256 * 256) - 1;
+
+      length = AdrEnd - AdrStart;              // bitmap legth
+      Byte4Group = length / Y / 4;
+    }
+    int  bitcolor;
+    bitcolor  = c[AdrStart] &= 0X80;  // 2010-05-04 alf  get background color
+    if (!bitcolor) {   // 2010-05-04 swap color
+      Bit[0] = copper;
+      Bit[1] = nonecopper;
+    }
+    get_pixel_info(layer);
+
+    if (!layer) {
+      brd_mm2 = p2[0] * pmm2;
+      sprintf(plane_statistic[nsl], "0_PCB\t%.2f mm�\t --\t%d", brd_mm2, p2[layer] );
+      nsl++;
+    }
+    else {
+      real pcbplane_mm2 = p2[0] * pmm2;
+      real copper_mm2 = p2[layer] * pmm2;
+      real percent = copper_mm2 / (pcbplane_mm2 / 100);
+      sprintf(plane_statistic[nsl], "%d\t%.2f mm�\t%.1f", layer,  copper_mm2, percent);
+      nsl++;
+    }
+  return;
+}
+
+
+string save(string file) {
+  int n;
+  sort( cntlayerfiles-1, plane_statistic);
+  string sfile = dlgFileSave(tr("Save statistic"), file, "*.cst");
+  if (sfile) {
+    output(sfile, "wt") {
+      printf("%s\n%s - Version %s\n%s\n\n%s\n\n%s\n",
+            EAGLE_SIGNATURE,
+            filename(argv[0]),
+            UlpVersion,
+            t2string(time()),
+            tr("Statistic Copper Plane:"),
+            Header );
+      do {
+        printf("%s\n", plane_statistic[n]);
+        n++;
+      } while(plane_statistic[n]);
+    }
+  }
+  return sfile;
+}
+
+
+// ***************** main ****************
+if (board) {
+  board(B) {
+    string remove_tempfile;
+    string file = filesetext(B.name, "");
+    brdfile = file + "~~~";
+
+    if (argc == 1) {
+      if (dlgMessageBox( infotext, tr("-Ok"), tr("-Cancel")) != 0) exit(0);
+      genereate_bitmaps(B);
+    }
+    fileBitmap = brdfile;
+    numeric string BMPlayerfiles[];
+    cntlayerfiles = fileglob(BMPlayerfiles, fileBitmap + "*.bmp");
+    Header = tr("Layer\tplane (Cu)\t% Cu");
+
+    sort( cntlayerfiles, BMPlayerfiles);
+    for (int n = 0; n < cntlayerfiles; n++) {
+      status("Load: " + BMPlayerfiles[n]);
+      pixel_map(BMPlayerfiles[n]);
+      sprintf(h, "REMOVE '%s';\n", BMPlayerfiles[n]);
+      remove_tempfile += h;
+    }
+
+    status(" ");
+    wait(1);
+    file += ".cst";
+    int select;
+    dlgDialog( tr("Statistics")) {
+      dlgListView(Header, plane_statistic, select);
+      dlgLabel(file);
+      dlgHBoxLayout {
+        dlgPushButton(tr("+OK")) dlgAccept();
+        dlgPushButton(tr("&Save")) if (save(file)) dlgAccept();
+        dlgStretch(1);
+      }
+    };
+    cmd +=   cmd += "GRID LAST;";
+    if (dlgMessageBox(tr("Delete temporary files (bitmaps)?"), tr("+Yes"), tr("-No") ) == 0) {
+      cmd += remove_tempfile;
+    }
+    exit(cmd);
+  }
+}
+
+else {
+  dlgMessageBox(tr("Start this ULP from a Board!"), "Ok");
+  exit(0);
+}

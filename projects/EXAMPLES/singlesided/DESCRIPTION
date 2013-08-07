@@ -1,0 +1,11 @@
+<language en>
+<b>Example Project for Singlesided Autorouting</b>
+<p>
+Test various Autorouter control files to use the Autorouter in one layer.
+</language>
+<language de>
+<b>Beispiel-Projekt für einseitiges Autorouten</b>
+<p>
+Testen Sie verschiedene Autorouter-Steuerdateien (*.ctl) um den Autorouter
+für einseitige Platinen zu verwenden.
+</language>

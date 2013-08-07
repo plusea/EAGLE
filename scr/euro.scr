@@ -1,0 +1,24 @@
+# Euro Format Board
+#
+# Draws the dimension lines of a euro format board (100mm x 160mm).
+
+
+Grid mm 1 off;
+Set Wire_Bend 0;
+Layer Dimension;
+Wire 0  (0 0) (160 100) (0 0);
+Layer Top;
+wire 2  (20 -1) (-1 20);
+wire  (140 -1) (161 20);
+wire (20  101) (-1  80);
+Set Wire_Bend 4;
+wire (161 80) (140 101);
+Layer Bottom;
+Set Wire_Bend 0;
+wire 2  (20 -1) (-1 20);
+wire  (140 -1) (161 20);
+wire (20  101) (-1  80);
+Set Wire_Bend 4;
+wire (161 80) (140 101);
+Grid Last;
+Window Fit;
