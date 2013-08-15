@@ -1,0 +1,437 @@
+#require 4.9203
+#usage     "<b>Bequemes Definieren von Bauteilen, insbesondere von Schützen</b>\n"
+           "<p>"
+           "Starten Sie das Programm vom Bibliothekseditor aus."
+           "<p>"
+           "Sie können damit aus vorhandenen Symbolen ein fertiges Device mit "
+           "Dummy-Package erzeugen. Die Pad-Namen des Package lassen sich editieren. "
+           "Das ist deshalb wichtig, weil in den Devices der Elektro-Bibliotheken nicht die "
+           "Symbol-Pin-Namen, sondern die Package-Pad-Namen angezeigt werden."
+           "<p>"
+           "Das Programm erzeugt eine temporäre Script-Datei im ersten SCR-Pfad, die "
+           "nach Drücken des OK-Buttons sofort ausgeführt wird. Die Datei wird gelöscht, "
+           "sobald EAGLE beendet wird.<p>"
+           "<author>Author: support@cadsoft.de</author>"
+
+
+numeric string PinCount[], PinNames[], SymName[];
+numeric string Lines[], DevLines[];
+numeric string DevRang[], DevPinCount[], DevPinNames[], DevSymName[];
+numeric string s;
+int NumAllPins = 0, NumSyms = 0;
+int Selected, SelectedDev = -1;
+int OutputFormat = 1;
+int SymDisplay = 1;
+int RangDev = 0;
+string NewDeviceName = "";
+string DeviceDescription = "";
+string MakePackCmd, MakeDevCmd;
+string DevicePrefix = "";
+string DevPinNamesAll = "";
+string f;
+// Benutzerspezifische Einstellungen
+int PadOffset = 100;
+int SpulenOffset = -400;
+int XrefOffset = 200;
+int ZeicheSymbolOffset = -500;
+
+//
+
+string HelpAllgemein =
+"<b>Bauteil (Device) für Elektro-Pläne erstellen</b><p>"
+"Wählen Sie im Bereich Symbolauswahl-Filter, welche Symbolart in der oberen Liste dargestellt "
+"werden soll. Ein Doppelklick auf einen Listeneintrag fügt dieses Symbol in die Device-Liste "
+"ein.<p>"
+"Wenn Sie ein Schütz entwerfen, wählen Sie zuerst eine Spule, dann die Kontakte und danach "
+"eventuell Zusatzsymbole ohne Kontakte. Das ganze Bauteil wird in dieser Reihenfolge im Schaltplan "
+"dargestellt. Die Reihenfolge ist wichtig, damit der Kontaktspiegel richtig dargestellt wird. "
+"Die Zusatzsymbole werden nur auf Anforderung (mit INVOKE) in den Schaltplan geholt.<p>"
+"Danach können Sie nach Anklicken des entsprechenden Buttons die Kontaktnamen editieren.<p>"
+"Nach OK entsteht das Bauteil in der geladenen Bibliothek. Vergessen Sie nicht, sie danach abzuspeichern.<p>"
+"Wenn Sie Bauteile ohne Kontaktspiegel entwerfen wollen, selektieren Sie <i>Alle Symbole</i> und "
+"übertragen Sie die Symbole in die Device-Liste, die nicht mit _KS (Kontaktspiegel) enden."
+;
+
+void ShowHelp(void) {
+dlgDialog("Hilfe") {
+  dlgVBoxLayout {
+     dlgLabel("&Hilfe");
+     dlgTextView(HelpAllgemein);
+     }
+  };
+}
+
+string HelpTextKontaktnamen =
+"Tragen Sie die gewünschten Kontaktnamen durch Leerzeichen getrennt ein und kontrollieren Sie \
+die Namen in der Listenansicht.\n\
+Reihenfolge: links oben, links unten (Spule), erster Kontakt oben, erster Kontakt unten etc.";
+
+string ErrorCorrectNames =
+"Kontaktamen nicht korrekt oder kein Device-Listen-Eintrag!\n"
+"Jeder Kontaktname darf nur einmal vorkommen, und die Anzahl \n"
+"der Namen muss der Anzahl der Pins entsprechen.\n"
+;
+
+// Debug-Routinen
+string DebugString = "";
+
+void DebugInt(string name, int n) {
+  string s;
+  sprintf(s, name + " %d\n", n);
+  DebugString += s;
+  }
+
+void DebugStr(string name, string v) {
+  DebugString += name + " " + v +"\n";
+  }
+
+void ShowInteger (string v, int n) {
+  string s;
+  sprintf(s, "%d", n);
+  dlgMessageBox(v + ": " + s);
+  }
+
+void ShowString (string label, string v) {
+  dlgMessageBox(label + ": " + v);
+  }
+
+// -----------------------------------------------------------------------------
+string StripWhiteSpace(string s) { // mit Zusatz: Doppel-Blanks im Inneren werden 1 Blank
+  int i, n;
+  string t;
+
+  while (s && isspace(s[0]))
+        s = strsub(s, 1);
+  while (s && isspace(s[strlen(s) - 1]))
+        s = strsub(s, 0, strlen(s) - 1);
+// Doppel-Blanks
+
+  for (i = 0; i < strlen(s); i++) {
+      if   (!isspace(s[i])) t[n++] = s[i];
+      else {
+         if ((strlen(s) > i+1) && isspace(s[i+1]));
+         else t[n++] = s[i];
+         };
+      }
+  s = t;
+
+  return s;
+}
+
+// Erzeuge Symbolauswahlliste
+void MakeSymSelectList(void) {
+  int NumLines = 0;
+  int NrOfPins = 0;
+  int Xref = 0;
+  string PNam;
+  NrOfPins = 0;
+
+  library(L) {
+     f = filename(L.name);
+     f = filesetext(f, "$$$.scr");
+     f = path_scr[0] + '/' + f;    // verwende Script-Pfad
+    L.symbols(S) {
+      NrOfPins = 0;
+      Xref = 0;
+      PinCount[NumLines] = "";
+      PinNames[NumLines]  = "";
+      SymName[NumLines]  = S.name;
+      S.texts(T) {
+        if (T.value == ">XREF") Xref++;
+        }
+      S.pins(P) {
+        NrOfPins++;
+        PinNames[NumLines] += StripWhiteSpace(P.name) + " ";
+        sprintf(PinCount[NumLines], "%d", NrOfPins);
+        PNam = P.name;
+        }
+      if ((strstr(S.name, "SPULE") >= 0) && SymDisplay == 0) {
+         Lines[NumLines++] =        PinCount[NumLines] + // Spulen
+                             "\t" + PinNames[NumLines] +
+                             "\t" + SymName[NumLines];
+         }
+      if (strstr(S.name, "_KS", strlen(S.name) - 3) >= 0) { // nur wenn Symbolname auf xxxx_KS endet
+           if (NrOfPins && SymDisplay == 1 && strstr(S.name, "SPULE") == -1 && strstr(PNam, "_") == -1) {
+           Lines[NumLines++] =       PinCount[NumLines] + // Hauptkontakte
+                              "\t" + PinNames[NumLines] +
+                              "\t" + SymName[NumLines];
+             }
+          if (NrOfPins && SymDisplay == 2 && strstr(S.name, "SPULE") == -1 && strstr(PNam, "_") == 0) {
+           Lines[NumLines++] =       PinCount[NumLines] + // Hilfskontakte
+                              "\t" + PinNames[NumLines] +
+                              "\t" + SymName[NumLines];
+             }
+         }
+      if (!NrOfPins && !Xref && SymDisplay == 3) {    // Symbole ohne Kontakte
+         Lines[NumLines++] =        PinCount[NumLines] +
+                             "\t" + PinNames[NumLines] +
+                             "\t" + SymName[NumLines];
+         }
+      if (SymDisplay == 4) {    // Symbole ohne Kontakte
+         Lines[NumLines++] =        PinCount[NumLines] +
+                             "\t" + PinNames[NumLines] +
+                             "\t" + SymName[NumLines];
+         }
+    Lines[NumLines] = "";
+    }
+}
+}
+
+
+// Übertrage gewähltes Symbol in Symbolliste
+void SymEntry(void) { // Selected liefert aus ListView gewählten Symbol-Index
+  numeric string Rang;
+
+  RangDev++;
+  sprintf(Rang, "%d", RangDev);
+
+  DevRang[NumSyms]     = Rang;
+  DevPinCount[NumSyms] = PinCount[Selected];
+  DevPinNames[NumSyms] = PinNames[Selected];
+  DevSymName[NumSyms]  = SymName[Selected];
+
+  DevLines[NumSyms++] =  Rang               +
+                  "\t" + PinCount[Selected] +
+                  "\t" + PinNames[Selected] +
+                  "\t" + SymName[Selected];
+
+  NumAllPins     += strtol(PinCount[Selected]);
+
+  DevPinNamesAll += " " + PinNames[Selected];
+  DevPinNamesAll = StripWhiteSpace(DevPinNamesAll);
+}
+
+void ClearDevList(void) {
+  int i;
+  for (i = 0; i <= NumSyms; i++) {
+      DevLines[i] = "";
+      }
+  NumSyms = 0;
+  RangDev = 0;
+  NumAllPins = 0;
+  MakeDevCmd = "";
+  DevPinNamesAll = "";
+}
+
+// int ValidSymName(string symname) {
+//  if (symname == "") return 0;
+//  library(L) { // Symbol-Name schon vorhanden?
+//   L.symbols(S) {
+//     if (strupr(symname) == S.name) return 0;
+//   }
+//  }
+//  return 1;
+// }
+
+string GetPinName(int PinIndex) { // Pin-Namen aus Listeneintrag extr., PinIndex 0...
+  string Pnames[];
+  strsplit(Pnames, DevPinNamesAll, ' ');
+  return Pnames[PinIndex];
+}
+
+int CorrectContactNames(void) { // Anzeige der Kontaktnamen aktualisieren
+  int i, j, n;
+  string pn = ""; // temp. Pin-Namen-String für 1 Symbol
+  string a[];
+
+  DevPinNamesAll = StripWhiteSpace(DevPinNamesAll);
+
+  // Prüfe Zahl der Pins
+  if (strsplit(a, DevPinNamesAll, ' ') != NumAllPins) return 0;
+
+  // Prüfe Doppelnamen
+  if (NumAllPins > 1) {
+     while (i < NumAllPins) {
+       j = i + 1;
+       while (j < NumAllPins) {
+         if (a[i] == a[j++]) return 0;
+         }
+       i++;
+       }
+    }
+  for (j = 0; j < NumSyms; j++) {
+     pn = "";
+     for (i = 0; i < strtol(DevPinCount[j]); i++) {
+        pn += " " + GetPinName(n++);
+        }
+     pn = StripWhiteSpace(pn);
+     DevPinNames[j] = pn;
+     DevLines[j] =  DevRang[j]   +
+                     "\t" + DevPinCount[j] +
+                     "\t" + pn             +
+                     "\t" + DevSymName[j];
+     }
+  return 1;
+}
+
+int OkToClose(void) {
+  if (!CorrectContactNames()) {
+     dlgMessageBox(ErrorCorrectNames);
+     return 0;
+     }
+  library(L) { // Device-Name schon vorhanden?
+    L.devicesets(D) {
+      if (strupr(NewDeviceName) == D.name) {
+         dlgMessageBox("Bitte wählen Sie einen anderen Namen\n (Device schon vorhanden)!\n");
+         return 0;
+         }
+      }
+    L.packages(P) {
+      if (strupr(NewDeviceName) == P.name) {
+         dlgMessageBox("Bitte wählen Sie einen anderen Namen\n (Package schon vorhanden)!\n");
+         return 0;
+         }
+      }
+    }
+  if (NewDeviceName == "" || !NumSyms) {
+     dlgMessageBox("Das Bauteil kann nur erzeugt werden, wenn Sie einen Namen eingeben\n und mindestens ein Symbol in der Device-Liste steht!");
+     return 0;
+     }
+  else return 1;
+}
+
+string GetPinNameFromLbr(string Sname, int i) { // Pinname, i-ter Pin
+  string pn = "";
+  int n;
+  library(L) {
+    L.symbols(S) {
+      if (S.name == Sname) {
+         n = 0;
+         S.pins(P) {
+           if (i == n++) {
+              pn = P.name;
+              return pn;
+              }
+           }
+         }
+      }
+    }
+  return "";
+}
+
+void GenerateDevice(void) {
+  string s;
+  int i, j, k;
+  int XOffset = 0; // virtuelle Y-Nulllinie: rechts daneben wird nächster Kontakt platziert
+  int SymOffset;
+  int CoordY;
+  // Erzeuge Device-Befehle
+  MakeDevCmd += "edit " + NewDeviceName + ".dev;\n";
+  MakeDevCmd += "value on;\n";
+  MakeDevCmd += "grid mil 100 on;\n";
+  MakeDevCmd += "prefix '" + DevicePrefix + "';\n";
+  MakeDevCmd += "description '" + DeviceDescription + "';\n";
+  MakeDevCmd += "package '" + NewDeviceName + "';\n";
+  sprintf(s, "add '%s' R0 must 0 (%d %d);\n", DevSymName[0], SpulenOffset, XrefOffset);
+  MakeDevCmd += s;
+  for (i = 1; i < NumSyms; i++) {
+      if (strtol(DevPinCount[i]) >= 9) SymOffset = 600;
+      if (strtol(DevPinCount[i]) < 9)  SymOffset = 400;
+      if (strtol(DevPinCount[i]) < 7)  SymOffset = 300;
+      if (strtol(DevPinCount[i]) < 5)  SymOffset = 200;
+      if (strtol(DevPinCount[i]) < 3)  SymOffset = 100; // Abstand zwischen Einzelkontaktsymbolen, mil
+
+      if (strtol(DevPinCount[i])) { // Symbol mit Pins, rechts der Reihe nach platzieren
+         sprintf(s, "add '%s' R0 next 0 (%d %d);\n", DevSymName[i], XOffset + SymOffset, XrefOffset);
+         }
+      else {                        // Symbol ohne Pins, unter Spule aufeinander platzieren
+       sprintf(s, "add '%s' R0 can 0 (%d %d);\n", DevSymName[i], SpulenOffset, ZeicheSymbolOffset + SymOffset);
+         }
+
+      MakeDevCmd += s;
+      XOffset += 2 * SymOffset;
+      }
+
+  // Erzeuge Connect-Befehle
+  i = 0;
+  while (DevSymName[i]) {
+      j = 0;
+      while (GetPinNameFromLbr(DevSymName[i], j) != "") {
+          if (GetPinName(k)) {
+             sprintf(s, "connect 'G$%d.%s' '%s';\n", i+1 , GetPinNameFromLbr(DevSymName[i], j++), GetPinName(k++));
+             MakeDevCmd += s;
+             }
+          }
+      i++;
+      }
+
+//MakeDevCmd += "value on;\n";
+  MakeDevCmd += "grid last;\n";
+
+  // Erzeuge Package-Befehle
+  MakePackCmd  = "edit " + NewDeviceName + ".pac;\n";
+  MakePackCmd += "grid mil 100 on;\n";
+  for (i = 0; i < NumAllPins; i++) {
+      CoordY = i * PadOffset;
+      sprintf(s, "pad '%s' (%d 0);\n", GetPinName(i), CoordY);
+      MakePackCmd += s;
+      }
+
+  MakePackCmd += "grid last;\n";
+
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  // Ausgabe zuerst in Script-Datei, dann SCRIPT-Befehl ausführen
+  s = MakePackCmd + MakeDevCmd;
+  output(f, "wtD") printf("%s", s); // temporäre Script-Datei erzeugen
+  exit("SCRIPT '"+ f +"';");
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  }
+
+void EditSymParams(void) {
+  string a[];
+
+  dlgDialog("Kontaktnamen editieren") {
+     dlgHBoxLayout {
+        dlgLabel("Kontaktnamen");
+        dlgStringEdit(DevPinNamesAll);
+        }
+     dlgHBoxLayout {
+        dlgPushButton("&Hilfe") dlgMessageBox(HelpTextKontaktnamen);
+        dlgPushButton("-Abbrechen")  dlgReject();
+        dlgPushButton("+OK") if (CorrectContactNames()) dlgAccept();
+                             else dlgMessageBox(ErrorCorrectNames);
+        }
+     };
+}
+
+//***************************************************************
+SymDisplay = 0;
+MakeSymSelectList();
+
+dlgDialog("Erzeuge Device") {
+  dlgLabel("Symbolauswahlliste");
+  dlgListView("Pins\tPin-Namen\tSymbol-Name", Lines, Selected) SymEntry();
+  dlgLabel("Device-Liste");
+  dlgListView("Rang\tPins\tKontakt-Namen\tSymbol-Name", DevLines, SelectedDev);
+  dlgHBoxLayout {
+    dlgGroup("Symbolauswahl-Filter") {
+      dlgRadioButton("Spulen", SymDisplay) MakeSymSelectList();
+      dlgRadioButton("Hauptkontakte mit Kontaktspiegel", SymDisplay) MakeSymSelectList();
+      dlgRadioButton("Hilfskontakte mit Kontaktspiegel", SymDisplay) MakeSymSelectList();
+      dlgRadioButton("Symbole ohne Kontakte", SymDisplay) MakeSymSelectList();
+      dlgRadioButton("Alle Symbole", SymDisplay) MakeSymSelectList();
+      }
+    dlgGroup("Device-Parameter") {
+       dlgHBoxLayout {
+         dlgLabel("&Device-Name");
+         dlgStringEdit(NewDeviceName);
+         }
+       dlgHBoxLayout {
+           dlgLabel("&Bauteil-Prefix ");
+           dlgStringEdit(DevicePrefix);
+         }
+       dlgHBoxLayout {
+           dlgLabel("&Beschreibung");
+           dlgStringEdit(DeviceDescription);
+         }
+       }
+    }
+  dlgHBoxLayout {
+     dlgStretch(1);
+     dlgPushButton("&Hilfe") ShowHelp();
+     dlgPushButton("&Device-Liste löschen") ClearDevList();
+     dlgPushButton("&Kontaktnamen ändern")  EditSymParams();
+     dlgPushButton("-Abbrechen")  dlgReject();
+     dlgPushButton("+OK") if (OkToClose()) GenerateDevice();
+     }
+  };

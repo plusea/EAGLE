@@ -1,0 +1,1021 @@
+#usage "<b>Export UNIDAT format</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+#require 4.1106
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Rudi Hofer, CadSoft, rudi.hofer@cadsoft.de, 9/1999
+//
+// Revision 1.1: shape names derived from element names instead of package names (unique!)
+// Revision 1.2: output limited to elements with package in routine "component"
+// Revision 1.3: output of round pads corrected
+// Revision 2.0: shape names again derived from package names (seems to be the only
+//               solution which makes sense)
+//
+// Revision 3.0: include Crossref.ULP with Pin_Name from Sheet     -- alf@cadsoft.de
+// Revision 4.0: for EAGLE Version 4.0 with Dialog                 -- alf@cadsoft.de
+// Revision 5.0: exports Polygon of signals                        -- alf@cadsoft.de
+// Revision 6.0: exports Fiducial if placed from MAKRS.lbr         -- alf@cadsoft.de 30.03.2004
+//               Source: unidat.format.91010.doc from <Claus.Kessel@tecnomatix.com>
+//
+// Revision 7.0: correct rotation in rot() function 16.02.2005 alf@cadsoft.de
+// Revision 8.0: Display status of ULP in any function             -- alf@cadsoft.de 31.03.2005
+//               Function rot() : correct rotation for any angle
+//                                Pad/Smd-Rotation consider in Eagle 4.1
+//                                resolution in 1/1000
+//
+///////////////////////////////////////////////////////////////////////////////////////////
+// Since version 2.0 all packages with the same name must be identical (avoid REPLACE!)
+///////////////////////////////////////////////////////////////////////////////////////////
+// This ULP generates output for UNICAM software which is able to convert the
+// data for automatic mounting and test equipment. The resolution is fixed to 1/100 mm.
+//
+// To generate the output, load the board and run this ULP.
+//
+// You can provide properties like "partnumber", "tolerance" etc. in the
+// component library:
+//
+// - define a user layer named UNIDAT
+// - add texts in the form "propertyname=value" to this layer, e.g.
+//   partnumber=12345
+//   pos_tolerance=0.05
+// - see array property[] below for predefined property names
+// - by changing the array contents you can change the property names
+//   (do not change the number of array entries!)
+//
+// OUTPUT OF PROPERTIES IS ONLY POSSIBLE IF FORWARD & BACK ANNOTATION IS USED AND
+// IF THE SCHEMATIC AND THE BOARD ARE LOADED!
+// THE PROGRAM HAS TO BE EXECUTED FROM THE BOARD WINDOW!
+//
+//
+// Pads of the shape type OCTAGON are changed to round, if the following variable
+// is set to 1 (otherwise set to 0)
+
+   int disp_oct_as_round = 1;
+
+//
+///////////////////////////////////////////////////////////////////////////////////////////
+
+/* Dieses ULP erzeugt eine Cross-Referenzliste zwischen Pad und Pin ***
+ * Dabei wird eine Liste generiert, in der die Koordinaten
+ * der Pads/Netze im Board, in Bezug zu den Pins/Netze im
+ * Schaltplan(Sheet Nr.) stehen.
+ * A. Zaffran CadSoft 07.09.1999
+ */
+
+/*
+
+%COMPONENT
+C1|N$5|sheet2|15.240,8.890|mm|
+C1|1|N$5|sheet2|15.240,8.890|mm|
+|  | |     |       |    |
+|  | |     |       X    Y
+|  | |    Seite
+|  | Netzname
+|  Pad-Name
+Bauteil
+
+%PINS
+IC1|IC1A|FILTER|1|I0|sheet1|25.40,22.86|mm|
+|    |     |    |  |   |      |     |
+|    |     |    |  |   |      X     Y
+|    |     |    |  |   Seite
+|    |     |    |  Symbolischer Pin-Name
+|    |     |    Numerischer Pin-Name
+|    |     Netzname
+|    Gate-Name
+Bauteil
+
+*/
+
+string _MARKER_ = "marks";  // the library name for fiducials
+
+int   px[], py[], ps[], PinPoints = 0;  // Pin: x, y, sheet, counter
+string  pa[],      pg[],      pc[],         pn[],    pnn[];
+     // Part-name, gate-name, contact-name, pinname, pin-netname
+
+int   padx[], pady[], pads[], PadPoints = 0;  // Pad: x, y, sheet, counter
+string  padd[], padn[], padnn[];              // devicename, padname, pad-netname
+
+int   sheetload = 0;
+string proz = "%";
+string Pad_Pin = "";
+
+enum { bottom = 16 };
+
+string reffile;
+string unifile;
+
+string ULPversion = filename(argv[0]);
+
+//-----------------------------------------------------
+
+string user_layer_name = "unidat", // layer name for property definitions (lower case!)
+       jobname,
+//     jobrevision = "1.0",
+       layer_name[],
+       property_assign_char = "=",
+       property[] = {"partnumber"        // propterty[0] is partnumber and so on
+                    ,"parttype"
+                    ,"description"
+                    ,"pos_tolerance"
+                    ,"neg_tolerance"
+                    ,"user1"
+                    ,"user2"
+                    ,"user3"
+                    },
+       property_value[],
+       /*
+       PAD_SHAPE_SQUARE   square
+       PAD_SHAPE_ROUND    round
+       PAD_SHAPE_OCTAGON  octagon
+       PAD_SHAPE_LONG     long
+       PAD_SHAPE_OFFSET   offset
+       PAD_SHAPE_ANNULUS  annulus (only in Supply-Layer)
+       PAD_SHAPE_THERMAL  thermal (only in Supply-Layer)
+       */
+       padshape[] = {"S","R","O","L","T"},  // shapes - square, round, oct, long, offset
+       padname,
+       shapename[];
+
+real   ang2, cx, cy, rx, ry, x, y, x1, x2, y1, y2, r, a1, a2;;
+
+int    i,
+       padcount,
+       pad_is_numeric,
+       max_property = 7,
+       new,
+       sx = 0;
+
+// --------------------------------------------------------------------
+
+void test(void) {
+  string ref;
+  int nr = fileread(ref, reffile);
+  string uni;
+  int nu = fileread(uni, unifile);
+  dlgDialog("UNIDAT File export") {
+    dlgLabel("UNIDAT File: " + unifile);
+    dlgTextView(uni);
+    dlgLabel("Cross reference file: " + reffile);
+    dlgTextView(ref);
+    dlgHBoxLayout { dlgSpacing(400); }
+    dlgLabel("Fiducial library = '" + _MARKER_ + "'");
+    dlgHBoxLayout {
+      dlgStretch(1);
+      dlgPushButton("+OK") dlgAccept();
+      dlgStretch(1);
+    }
+  };
+  return;
+}
+
+void Header(string name) {
+  printf(";This file is generated by %s from:\n", ULPversion);
+  printf(";%s';\n", name);
+}
+
+int search_Pad_Pin(string name, string pad) {
+  for (int pin = 0; pin < PinPoints; pin++) {
+    if (pa[pin] == name && pc[pin] == pad){
+      break;
+    }
+  }
+  if (pin == PinPoints) pin = -2;
+  return pin;
+}
+
+// --------------------------------------------------------------------
+
+real u2u(int x) { // resolution 1/100 mm
+   x = round(x * 100)/100;
+   return u2mm(x);  // if mm
+}
+
+real u2ang(real x) {
+  if (x > 360)
+     x = x -360;
+  x = round(x * 10)/10;
+  return x;
+}
+
+//-----------------------------------------------------
+real Xneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+  real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+  real WinkelNeu;                     /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+  if ((Xalt > Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 1 */
+    WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 2 */
+    WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 3 */
+    WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt > Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 4 */
+    WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt == Yorigin)) {                /* Ursprung   */
+    WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt > Yorigin)) {                 /* 90°        */
+    WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt < Yorigin)) {                 /* 270°       */
+    WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * cos(rad));
+  }
+}
+
+//-----------------------------------------------------
+real Yneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+  real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+  real WinkelNeu;          /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+  if ((Xalt > Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 1 */
+    WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt >= Yorigin)) {                 /* Quadrant 2 */
+    WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 3 */
+    WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt > Xorigin) && (Yalt < Yorigin)) {                  /* Quadrant 4 */
+    WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt == Yorigin)) {                /* Ursprung   */
+    WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt > Yorigin)) {                  /* 90°        */
+    WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt < Yorigin)) {                   /* 270°       */
+    WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+    real rad = PI / 180 * WinkelNeu;
+    return (RADIUS * sin(rad));
+  }
+}
+
+
+
+
+//-----------------------------------------------------
+void rot(real alfa, real xt, real yt) { // change if finer rotation possible
+                                        // 30.03.2005 alf@cadsoft.de
+  if (alfa == 0) {
+    x = xt; y = yt;
+  }
+  else if (alfa == 90) {
+    x = yt;  y = -xt;
+  }
+  else if (alfa == 180) {
+    x = -xt; y = -yt;
+  }
+  else if (alfa == 270) {
+    x = -yt; y = xt;
+  }
+  else {
+    x = Xneu(xt, yt, 0.0, 0.0, 360 - alfa);
+    y = Yneu(xt, yt, 0.0, 0.0, 360 - alfa);
+  }
+  x = round(x * 1000)/1000;
+  y = round(y * 1000)/1000; // resolution 1/1000 mm
+  return;
+}
+
+//-----------------------------------------------------
+string padtype(UL_CONTACT C) { // name contains shape SROXY or SM for SMD
+  string s;                    // diam_drill (in 1/100mm) or smdx_y in (1/100 mm)
+  real pdi, pdr, sx, sy;       // e.g. SR_140_80 or SM_100_120
+  if (C.pad) {
+    pdi = round(u2u(C.pad.diameter[bottom]) * 100);
+    pdr = round(u2u(C.pad.drill) * 100);                  // not used
+    sprintf(s, "P%s_%03.0f", padshape[C.pad.shape[bottom]], pdi); // pdr could be used, too
+  }
+  if (C.smd) {
+    sx = round(u2u(C.smd.dx) * 100);
+    sy = round(u2u(C.smd.dy) * 100);
+    sprintf(s, "SM_%03.0f_%03.0f", sx, sy);
+  }
+  return s;
+}
+
+//-----------------------------------------------------
+real padrotation(UL_CONTACT C) {
+  if (C.pad) return C.pad.angle;
+  if (C.smd) return C.smd.angle;
+}
+
+//-----------------------------------------------------
+int padelongation(UL_CONTACT C) {
+  int e = 0;
+  if (C.pad) e = C.pad.elongation;
+  return e;
+}
+
+//-----------------------------------------------------
+string viatype(UL_VIA V) {
+  string s;                    // diam_drill (in 1/100mm)
+  real pdi, pdr, sx, sy;       // e.g. SR_140_80 or SM_100_120
+  pdi = round(u2u(V.diameter[bottom]) * 100);
+  pdr = round(u2u(V.drill) * 100);                      // not used
+  sprintf(s, "P%s_%03.0f", padshape[V.shape[bottom]], pdi);     // pdr could be used, too
+  return s;
+}
+//-----------------------------------------------------
+void print_pad_shape(string s, real r, int e) {
+  real x, y, w, wx, wy, a, b, c, d, elong = e/100;
+
+  string s1;
+  sprintf(s1, "%s.%s", strsub(s, 3, 1), strsub(s, 4, 2));
+  x = strtod(s1);
+  if (strsub(s, 1, 1) == padshape[0]) { // look for padshape S|R|O|L|T
+    w = x/2;
+    printf("L (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g)\n",
+                w, w,   w,-w,  -w,-w,  -w, w,   w, w);
+  }
+  if (strsub(s, 1, 1) == padshape[1]) {
+    printf("C 0,0,%s.%s\n", strsub(s, 3, 1), strsub(s, 4, 2));
+  }
+  if (strsub(s, 1, 1) == padshape[2]) {
+    if (!disp_oct_as_round) {
+      x = x/2;
+      w = x/2;
+      printf("L (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g)\n",
+                    w, x,   x, w,   x,-w,   w,-x,  -w,-x,  -x,-w,  -x, w,  -w, x,   w, x);
+    }
+    else {
+      printf("C 0,0,%s.%s\n", strsub(s, 3, 1), strsub(s, 4, 2));
+    }
+  }
+  if (strsub(s, 1, 1) == padshape[3]) { // long
+    a = 3*x/8; b = x/2*elong; c = x/8; d = x/4; // dimension ratio x:y = elong
+    printf("L (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g)\n",
+                 a,d, b,c, b,-c, a,-d, -a,-d, -b,-c, -b,c, -a,d, a,d);
+  }
+  if (strsub(s, 1, 1) == padshape[4]) { // offset
+    a = 3*x/8; b = x/2*elong; c = x/8; d = x/4; // dimension ratio x:y = elong
+    printf("L (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g)\n",
+                 a,d, b,c, b,-c, a,-d, -a,-d, -b,-c, -b,c, -a,d, a,d);
+  }
+  if (strsub(s, 1, 1) == "M") {         // look for padshape M = SMD
+    sprintf(s1, "%s.%s", strsub(s, 7, 1), strsub(s, 8, 2));
+    y = strtod(s1);
+    wx = x/2; wy = y/2;
+    printf("L (%g,%g) (%g,%g) (%g,%g) (%g,%g) (%g,%g)\n",
+                wx, wy,  wx,-wy,  -wx,-wy,  -wx, wy,  wx, wy);
+  }
+  return;
+}
+
+//-----------------------------------------------------
+void center(UL_ELEMENT E) { // returns cx, cy
+  real xmin, xmax, ymin, ymax;
+  xmin = u2u(E.x); xmax = xmin;
+  ymin = u2u(E.y); ymax = ymin;
+  E.package.wires(W){
+    if (W.layer == LAYER_TPLACE || W.layer == LAYER_BPLACE) {
+      xmin = min(u2u(W.x1),xmin);
+      xmin = min(u2u(W.x2),xmin);
+      ymin = min(u2u(W.y1),ymin);
+      ymin = min(u2u(W.y2),ymin);
+      xmax = max(u2u(W.x1),xmax);
+      xmax = max(u2u(W.x2),xmax);
+      ymax = max(u2u(W.y1),ymax);
+      ymax = max(u2u(W.y2),ymax);
+    }
+  }
+  cx = (xmin+xmax)/2; cy = (ymin+ymax)/2;
+  return;
+}
+
+//-----------------------------------------------------
+string smd_info(UL_ELEMENT E) {
+  E.package.contacts(C) {
+    if (C.pad)  return "THT";
+    else        return "SMD";
+  }
+  return "SMD"; // in case it has no electrical connection (e.g. fiducial)
+}
+
+//---------------------------------------------------
+void get_user_parameters(UL_ELEMENT E) { // assign property_values[]
+  string s, pname, pvalue;
+  int    pos, len;
+  if (project.schematic) {
+    project.schematic(S) {
+      S.parts(P) {
+        if (P.name == E.name) {
+          P.instances(I) {
+            for (i = 0; i <= max_property; i++) { // clear properties
+              property_value[i] = "";
+            }
+            I.gate.symbol.texts(T) {
+              if (strlwr(layer_name[T.layer]) == user_layer_name) {
+                s = T.value;
+                len = strlen(s);
+                pos = strstr(s, property_assign_char);
+                if (pos > 0) {
+                  pname  = strsub(s, 0, pos);
+                  pvalue = strsub(s, pos+1, len - pos);
+                  i = 0;
+                  while (i <= max_property) {
+                    if (property[i] == strlwr(pname)) {
+                      property_value[i] = pvalue;
+                    }
+                    i++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  else { // no schematic -> no properties
+    for (i = 0; i <= max_property; i++) { // clear properties
+      property_value[i] = "";
+    }
+  }
+  return;
+}
+
+//---------------------------------------------------
+string signame(string elname, string padname) {
+  string s = "";
+  board(B) {
+    B.signals(S) {
+      S.contactrefs(C) {
+        if (C.element.name == elname) {
+          if (C.contact.name == padname) {
+            s = S.name;
+          }
+        }
+      }
+    }
+  }
+  return s;
+}
+
+//////////////////////////////////////////////////////
+void create_info() {
+  status("Info");
+  int t = time();
+  printf ("%%%%%%INFO\n");
+  printf ("DATE=%02d.%02d.%02d %02d:%02d:%02d\n",
+          t2day(t),t2month(t)+1,t2year(t),t2hour(t),t2minute(t),t2second(t));
+  printf ("DELIMITER=|\n");
+  printf ("UNITS=MM\n");
+  printf ("UNIDAT_VERSION=1.2\n");           // Unidat Software Version
+  printf ("JOB_NAME=%s\n", jobname);
+//printf ("JOB_REVISION=%s\n", jobrevision); // get from somewhere
+  printf ("NR_OF_PCBOARDS=1\n");
+  printf ("TOP_LAYER=1\n");
+  printf ("BOTTOM_LAYER=16\n");
+  printf ("CADSOFTWARE=EAGLE %d.%d\n", EAGLE_VERSION, EAGLE_RELEASE);
+  // schematic information could be added here
+  // e.g. create script file which creates a postscript schematic file
+  return;
+}
+
+//////////////////////////////////////////////////////
+void outline(UL_BOARD B) {
+  printf ("\n%%%%OUTLINE\n");
+  printf ("%%GRAFITEM\n");
+  B.wires(W) {
+    if(W.curve) {
+      if (W.layer == LAYER_DIMENSION) {
+        printf("A %g,%g,%g,%.1f,%.1f\n",
+               u2u(W.arc.xc),u2u(W.arc.yc),u2u(W.arc.radius),u2ang(W.arc.angle1),u2ang(W.arc.angle2 - W.arc.angle1));
+      }
+    }
+    else {
+      if (W.layer == LAYER_DIMENSION) {
+         printf("L (%g,%g) (%g,%g)\n", u2u(W.x1), u2u(W.y1), u2u(W.x2), u2u(W.y2));
+      }
+    }
+  }
+  B.circles(C) {
+    if (C.layer == LAYER_DIMENSION) {
+       printf("C %g,%g,%g\n", u2u(C.x), u2u(C.y), u2u(C.radius));
+    }
+  }
+  B.elements(E) {
+    E.package.wires(W) {
+      if(W.curve) {
+        if (W.layer == LAYER_DIMENSION) {
+          printf("A %g,%g,%g,%.1f,%.1f\n",
+                 u2u(W.arc.xc),u2u(W.arc.yc),u2u(W.arc.radius),u2ang(W.arc.angle1),u2ang(W.arc.angle2 - W.arc.angle1));
+        }
+      }
+      else {
+        if (W.layer == LAYER_DIMENSION) {
+           printf("L (%g,%g) (%g,%g)\n", u2u(W.x1), u2u(W.y1), u2u(W.x2), u2u(W.y2));
+        }
+      }
+    }
+  }
+  printf ("%%ENDGRAFITEM\n");
+  return;
+}
+
+//////////////////////////////////////////////////////
+void fiducials(UL_BOARD B) {
+  printf ("\n%%%%FIDUCIALS\n");
+  B.elements(E) {
+    if (E.package.library == _MARKER_) {
+      printf("%s|||",E.name);                   // NAME
+      printf("%g|%g|",u2u(E.x), u2u(E.y));      // X,Y
+      printf("%.1f|",u2ang(E.angle));           // ROTATION
+      if (E.mirror) printf("bottom|");          // ASSEMBLY SIDE
+      else          printf("top|");
+      printf("%s|",E.package.name);             // SHAPE (e.g. SH_IC1) // special version
+      printf("\n");
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void component(UL_BOARD B) {
+  printf ("\n%%%%COMPONENT\n");
+  B.elements(E) { // add exclusion for el. w/o package!!!
+    if (E.package.library != _MARKER_) {
+      if (E.package) {
+        status("Component " + E.name);
+        get_user_parameters(E);                   // get user defined prop. from spec. layer
+        printf("%s|",E.name);                     // NAME
+        printf("%s|",property_value[0]);          // PARTNUMBER
+        printf("|");                              // PARTCODE not used
+        printf("%s|",property_value[1]);          // PARTTYPE
+        printf("%s|",property_value[2]);          // PARTDESCRIPTION
+        printf("%s|",E.package.name);             // SHAPE (e.g. SH_IC1) // special version
+        printf("%.1f|",u2ang(E.angle));           // ROTATION
+        if (E.mirror)  printf("bottom|");         // ASSEMBLY SIDE
+        else           printf("top|");
+        printf("%g|%g|",u2u(E.x), u2u(E.y));      // X,Y
+        center(E);
+        printf("%g|%g|",cx, cy);                  // X,Y of center point
+        printf("%s|", smd_info(E));               // SMD or Through-hole
+        printf("|0|");                    	          // VALUE = 0
+        printf("%s|",property_value[3]);          // POS TOLERANCE
+        printf("%s|",property_value[4]);          // NEG TOLERANCE
+        printf("%s|",property_value[5]);          // USER1
+        printf("%s|",property_value[6]);          // USER2
+        printf("%s",property_value[7]);           // USER3
+        printf("\n");
+      }
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void other_drillings(UL_BOARD B) {
+  printf ("\n%%%%OTHER_DRILLINGS\n");
+  return;
+}
+
+//////////////////////////////////////////////////////
+void component_pin(UL_BOARD B) {
+  printf ("\n%%%%COMPONENT_PIN\n");
+  B.elements(E) {
+    if (E.package.library != _MARKER_) {
+      status("Component pin " + E.package.name);
+      pad_is_numeric = 1;
+      E.package.contacts(C) { // test if name numeric
+        padname = C.name;
+        for (i = 0; padname[i]; ++i) {
+          if (!isdigit(padname[i])) {
+            pad_is_numeric = 0;
+          }
+        }
+      }
+      padcount = 1;
+      rx = u2u(E.x); ry = u2u(E.y);              // origin of package
+      E.package.contacts(C) {
+        status("Comp-Pin " + E.package.name);    // 29.03.2005 alf@cadsoft.de
+        printf("%s|",E.name);                    // COMP. NAME
+        if (pad_is_numeric) {
+          printf("%s|", C.name);                 // PADNR
+        }
+        else {
+          printf("%d|", padcount);
+          padcount++;
+        }
+        int pin = search_Pad_Pin(E.name, C.name);
+        if (sheetload) {
+          if (pin < 0) {
+            printf("|");                         // Gate not placed
+          }
+          else {
+            printf("%s|", pn[pin]);              // PIN NAME
+          }
+        }
+        else {
+          printf("no-sheet|");
+        }
+
+        printf("%s|", signame(E.name, C.name));  // NET NAME
+        x1 = u2u(C.x)-rx; y1 = u2u(C.y)-ry;
+        rot(E.angle, x1, y1);                    // get x,y
+        printf("%g|%g|", x, y);                  // REL. POSITION OF PADS
+        if (C.pad) {
+          printf("%s|", padtype(C));             // PADTYPE TOP
+          printf("%.1f|", u2ang(E.angle));       // PAD ORIENTATION TOP
+          printf("%s|", padtype(C));             // PADTYPE BOTTOM
+          printf("%.1f", u2ang(E.angle));        // PAD ORIENTATION BOTTOM
+        }
+        if (C.smd) {
+          if (C.smd.layer == LAYER_TOP) {
+            printf("%s|", padtype(C));           // PADTYPE TOP
+            printf("%.1f|", u2ang(E.angle));     // PAD ORIENTATION TOP
+            printf("|");                         // BOTTOM empty
+          }
+          else {
+            printf("||");                        // TOP empty
+            printf("%s|", padtype(C));           // PADTYPE BOTTOM
+            printf("%.1f", u2ang(E.angle));      // PAD ORIENTATION BOTTOM
+          }
+        }
+        printf("\n");
+      }
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void pad(UL_BOARD B) {
+  string t[];
+  int    i, j = 0, new;
+  printf ("\n%%%%PAD\n");
+  status("Pads");
+  B.elements(E) {
+    if (E.package.library != _MARKER_) {
+      E.package.contacts(C) {
+        new = 1;                             // padtype not generated yet
+        for (i = 0; t[i]; i++) {
+          if (t[i] == padtype(C))  new = 0;  // padtype exists
+        }
+        if (new) {
+          t[j] = padtype(C);
+          j++;
+          printf("PAD=%s\n", padtype(C));
+          printf("%%GRAFITEM\n");
+          printf("FC 9,0,0,0\n");
+          print_pad_shape(padtype(C), padrotation(C), padelongation(C));
+          printf("%%ENDGRAFITEM\n");
+        }
+      }
+    }
+  }
+  B.signals(S) {
+    status("Vias");
+    S.vias(V) {
+      new = 1;
+      for (i = 0; t[i]; i++) {
+        if (t[i] == viatype(V))  new = 0;     // padtype exists
+      }
+      if (new) {
+        t[j] = viatype(V);
+        j++;
+        printf("PAD=%s\n", viatype(V));
+        printf("%%GRAFITEM\n");
+        printf("FC 9,0,0,0\n");
+        print_pad_shape(viatype(V), 0, 0);
+        printf("%%ENDGRAFITEM\n");
+      }
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void shape(UL_BOARD B) {     // what if mirrored?
+  sx = 0;
+  printf ("\n%%%%SHAPE\n");
+  B.elements(E) {
+    if (E.package.library != _MARKER_) {
+      new = 1;                    // padstacktype not generated yet
+      for (i = 0; shapename[i]; i++) {
+        if (shapename[i] == E.package.name) new = 0;   // shapename exists
+      }
+      if (new) {
+        status("Shape " + E.package.name);  // 29.03.2005
+        shapename[sx] = E.package.name;
+        sx++;
+        printf ("SHAPE=%s\n", E.package.name);
+        printf ("%%SHAPEOUTLINE\n");
+        printf ("%%GRAFITEM\n");
+        rx = u2u(E.x); ry = u2u(E.y); // origin for rot function
+        E.package.wires(W) {
+          if (W.curve) {
+            if (W.arc.layer == LAYER_TPLACE || W.arc.layer == LAYER_BPLACE) {
+              x1 = u2u(W.arc.xc)-rx; y1 = u2u(W.arc.yc)-ry;
+              rot(E.angle, x1, y1); // new coord x,y
+              printf("A %g,%g,%g,%.1f,%.1f\n",
+                       x, y, u2u(W.arc.radius),u2ang(W.arc.angle1 - E.angle),u2ang(W.arc.angle2 - W.arc.angle1));
+            }
+          }
+          else {
+            if (W.layer == LAYER_TPLACE || W.layer == LAYER_BPLACE) {
+              x1 = u2u(W.x1)-rx; y1 = u2u(W.y1)-ry; x2 = u2u(W.x2)-rx; y2 = u2u(W.y2)-ry;
+              rot(E.angle, x1, y1); x1 = x; y1 = y;
+              rot(E.angle, x2, y2); x2 = x; y2 = y;
+              printf("L (%g,%g) (%g,%g)\n", x1, y1, x2, y2);
+            }
+          }
+        }
+        E.package.circles(C) {
+          if (C.layer == LAYER_TPLACE || C.layer == LAYER_BPLACE) {
+            x1 = u2u(C.x)-rx; y1 = u2u(C.y)-ry;
+            rot(E.angle, x1, y1);
+            printf("C %g,%g,%g\n", x, y, u2u(C.radius));
+          }
+        }
+        printf ("%%ENDGRAFITEM\n");
+        printf ("%%PACKAGEDIMENSION\n");
+        printf ("%%PINLIST\n");
+        pad_is_numeric = 1;
+        E.package.contacts(C) { // test if name numeric
+          padname = C.name;
+          for (i = 0; padname[i]; ++i) {
+            if (!isdigit(padname[i])) {
+              pad_is_numeric = 0;
+            }
+          }
+        }
+        padcount = 1;
+        E.package.contacts(C) {
+          if (pad_is_numeric) {
+            printf("%s|", C.name);                    // PADNR
+          }
+          else {
+            printf("%d|", padcount);
+            padcount++;
+          }
+          x1 = u2u(C.x)-rx; y1 = u2u(C.y)-ry;
+          rot(E.angle, x1, y1); // get x,y
+          printf("%g|%g|", x, y);                     // REL. POSITION OF PADS
+          if (C.pad) {
+            printf("%s|", padtype(C));                // PADTYPE TOP
+            printf("%.1f|", u2ang(E.angle));          // PAD ORIENTATION TOP
+            printf("%s|", padtype(C));                // PADTYPE BOTTOM
+            printf("%.1f", u2ang(E.angle));           // PAD ORIENTATION BOTTOM
+          }
+          if (C.smd) {
+            if (C.smd.layer == LAYER_TOP) {
+              printf("%s|", padtype(C));              // PADTYPE TOP
+              printf("%.1f|", u2ang(E.angle));        // PAD ORIENTATION TOP
+              printf("|");                            // BOTTOM empty
+            }
+            else {
+              printf("||");                           // TOP empty
+              printf("%s|", padtype(C));              // PADTYPE BOTTOM
+              printf("%.1f", u2ang(E.angle));         // PAD ORIENTATION BOTTOM
+            }
+          }
+          printf("\n");
+        }
+      }
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void via(UL_BOARD B) {
+  int i;
+  printf("\n%%%%VIA\n");
+  B.signals(S) {
+    status("S-Via " + S.name);
+    S.vias(V) {
+      i++;
+      printf("VIA%d|%s|%g|%g|1|16|%s|0|%s|0|Y|Y\n",
+             i, S.name, u2u(V.x), u2u(V.y), viatype(V), viatype(V));
+    }
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void track(UL_BOARD B) {
+  printf("\n%%%%TRACK\n");
+  B.signals(S) {
+    status("Track " + S.name);
+    printf("NET=%s\n", S.name);
+    printf("%%GRAFITEM\n");
+    S.wires(W) {
+      printf("N %d\n", W.layer);
+      printf("W %g\n", u2u(W.width));
+      printf("FC 0,0,0,0\n");
+      printf("L (%g,%g) (%g,%g)\n", u2u(W.x1), u2u(W.y1), u2u(W.x2), u2u(W.y2));
+    }
+    S.polygons(POL) {
+      POL.contours(W) {
+        printf("N %d\n", W.layer);
+        printf("W %g\n", u2u(W.width));
+        printf("FC 0,0,0,0\n");
+        printf("L (%g,%g) (%g,%g)\n", u2u(W.x1), u2u(W.y1), u2u(W.x2), u2u(W.y2));
+      }
+      POL.fillings(W) {
+        printf("N %d\n", W.layer);
+        printf("W %g\n", u2u(W.width));
+        printf("FC 0,0,0,0\n");
+        printf("L (%g,%g) (%g,%g)\n", u2u(W.x1), u2u(W.y1), u2u(W.x2), u2u(W.y2));
+      }
+    }
+    printf("%%ENDGRAFITEM\n");
+  }
+  return;
+}
+
+//////////////////////////////////////////////////////
+void create_pcboard_section(UL_BOARD B) {
+  //  printf ("\n%%%%%%PCBOARDIdentifier\n");
+  outline(B);
+  //panelstructure();
+  fiducials(B);
+  component(B);
+  other_drillings(B);
+  component_pin(B);
+  //subcomponent();
+  //testpad();
+  pad(B);
+  shape(B);
+  via(B);
+  track(B);
+  //summary();
+  return;
+}
+
+//////////////////////////////////////////////////////
+
+//main
+// *** Board coord. ***
+if (board) board(B) {
+  reffile = filesetext(B.name, ".ref");
+  output(reffile, "wt") {
+    Header(B.name);
+    printf("%sCOMPONENT\n", proz);
+
+    // *** collect all pads ***
+    B.elements(E) {
+      if (E.package.library != _MARKER_) {
+        status("Package " + E.package.name);                 // 29.03.2005 alf@cadsoft.de
+        E.package.contacts(C) {
+          if (C.pad) {
+            padx[PadPoints] = C.pad.x;
+            pady[PadPoints] = C.pad.y;
+            padd[PadPoints] = E.name;
+            padn[PadPoints] = C.name;
+            padnn[PadPoints] = "*nc*";      // *** default not connected ***
+            PadPoints++;
+          }
+        }
+      }
+    }
+    B.signals(S) {
+      // *** if pad connected to net ***
+      S.contactrefs(C) {
+        status("B-Signal " + S.name + "/" + C.element.package.name);        // 29.03.2005 alf@cadsoft.de
+        for (int pad = 0; pad < PadPoints; pad++) {
+          if (padx[pad] == C.contact.x && pady[pad] == C.contact.y) {
+            padnn[pad] = S.name;       // *** connectad to net-name ***
+                                       // default *nc* = not connected
+            break;
+          }
+        }
+      }
+    }
+
+    // **** Sheet coord. ****
+    if (project.schematic) {
+      sheetload = 1;
+      project.schematic(S) {
+        // *** collect all Pins ***
+        S.sheets(SH) {
+          SH.parts(PA) {                           // *** IC1   ***
+            status("Part " + PA.name);        // 29.03.2005 alf@cadsoft.de
+            int gate = 0;
+            PA.device.gates(G) {
+              gate++;
+            }
+            int dir = 5;                           // Dirction PWR
+            int Pinn = 0;                          // Pin counter for Gate
+            PA.instances(IN) {                     // *** IC1A  ***
+              IN.gate.symbol.pins(P) {
+                if (P.contact) {
+                  if (P.direction != 5) {         // only PWR-Pins in Gate ?
+                    dir = P.direction;
+                  }
+                  pc[PinPoints] = P.contact.name;        // PAD name von Connect/Pad
+                  px[PinPoints] = P.x;
+                  py[PinPoints] = P.y;
+                  ps[PinPoints] = IN.sheet;              // SHEET#
+                  pa[PinPoints] = PA.name;               // PART name
+                  pg[PinPoints] = IN.name;               // Part+GATE name
+                  pn[PinPoints] = P.name;                // PIN name
+                  PinPoints++;
+                  Pinn ++;
+                }
+                else {
+                  gate = 0;        // Reset Gate counter - Supply Symbol has no Gates
+                  // pc[PinPoints] = " no pac.";             // kein Pad-Name nur Symbol!!
+                }
+              }
+            }
+            if (PinPoints > 0) {
+              switch (gate) {
+                case 2 : if (dir == 5) {
+                           // Gate-Name wird angezeigt
+                           break;
+                         }
+                         if (dir != 5) {
+                           pg[PinPoints -1] = pa[PinPoints - 1];  // Gatename wird nicht angezeigt
+                           break;
+                         }
+                case 1 : for (int gp = 0; gp < Pinn; gp++) {
+                           pg[PinPoints - gp -1] = "";               // clear all Pin-Gate-name
+                         }
+                case 0 : // printf("no Gates (Supply?) =%d\n", gate);
+              }
+            }
+          }
+        }
+      }
+      // *** print all Pad ccord.
+      for (int pad = 0; pad < PadPoints; pad++) {
+        for (int p = 0; p < PinPoints; p++) {
+          if (padd[pad] == pa[p] && padn[pad] == pc[p]) {
+            pads[pad] = ps[p];                        // copy Sheet# to Pad
+            pnn[p] = padnn[pad];                      // Signal name to Pin
+          }
+        }
+        printf("%s|%s|%s|sheet%d|", padd[pad], padn[pad], padnn[pad], pads[pad]);
+        printf("%.3f,%.3f|mm|\n", u2mm(padx[pad]), u2mm(pady[pad]));
+      }
+      // ***  %PINS ***
+      printf("%sPINS\n", proz);
+      // *** print all Pin sheet/coord. ***
+      for (int pin = 0; pin < PinPoints; pin++) {
+        status("Pins " + pa[pin]);        // 29.03.2005 alf@cadsoft.de
+        printf("%s|%s|%s|%s|%s|sheet%d|%.2f,%.2f|mm|\n",
+        pa[pin], pg[pin], pnn[pin], pc[pin], pn[pin], ps[pin], u2mm(px[pin]), u2mm(py[pin]));
+      }
+    }
+    else {
+      dlgMessageBox("Please load Schematic first! No data generated!", "OK");
+      exit (-1);
+    }
+  }
+}
+
+if (board) board(B) {
+  jobname = filename(B.name);
+  jobname = strsub(jobname, 0, strlen(jobname) - 4);
+  unifile = filesetext(B.name, ".uni");
+  output(unifile, "wt") {
+    create_info();
+    create_pcboard_section(B);
+  }
+  test();
+  exit (0);
+}
+
+else {
+  dlgMessageBox("<qt>Start <b>" + ULPversion + "</b> from a <b>Board</b></qt>", "OK");
+  exit (-2);
+}

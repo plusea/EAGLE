@@ -1,0 +1,94 @@
+#usage "<b>Delete unused packages and symbols</b>\n"
+       "<p>"
+       "To delete unused packages and symbols from a library, "
+       "run this ULP. You are allowed to edit the commands in "
+       "the appearing editor window."
+       "<p>"
+       "The remaining DELETE commands will be executed after "
+       "clicking the EXECUTE button."
+       "<p>"
+       "Packages and Symbols in use can't be deleted. To confirm this "
+       "messages keep the Enter key pressed until the ULP has finished."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+if (library) {
+string cmd = "", h;
+int Result;
+
+////////////////
+// Checkboxes in Dialog
+int pack = 1;
+int sym  = 1;
+
+//---------------------------------------------------
+Result = dlgDialog("Delete Packages/Symbols") {
+  dlgHBoxLayout {
+     dlgStretch(0);
+     dlgGroup("Delete") {
+        dlgStretch(0);
+        dlgGridLayout {
+           dlgCell(1, 1) { dlgSpacing(30); dlgCheckBox("&Packages", pack); };
+           dlgCell(2, 1) { dlgSpacing(30); dlgCheckBox("&Symbols", sym); };
+           }
+        }
+     dlgStretch(0);
+     dlgVBoxLayout {
+        dlgHBoxLayout {
+           dlgSpacing(20);
+           dlgStretch(0);
+           dlgPushButton("+OK") dlgAccept();
+           dlgStretch(1);
+           }
+        dlgHBoxLayout {
+           dlgSpacing(20);
+           dlgStretch(0);
+           dlgPushButton("-Cancel") dlgReject();
+           dlgStretch(1);
+           }
+        }
+     dlgStretch(1);
+     }
+   dlgStretch(1);
+  };
+if (Result == 0) exit (0);
+//---------------------------------------------------
+
+cmd += "set undo_log off;\n";
+library(L) {
+  if (pack) {
+      L.packages(P) {
+        h = "";
+        sprintf(h,"REMOVE %s.pac;\n",P.name);
+        cmd += h;
+        }
+      }
+  if (sym) {
+     L.symbols(S) {
+       h = "";
+       sprintf(h,"remove %s.sym;\n",S.name);
+       cmd += h;
+       }
+     }
+  }
+cmd += "set undo_log on;\n";
+
+//  EditBox
+Result = dlgDialog("edit and execute") {
+    dlgTextEdit(cmd);
+    dlgHBoxLayout {
+       dlgPushButton("+Execute") dlgAccept();
+       dlgPushButton("-Cancel") dlgReject();
+       }
+    };
+if (!Result) exit(0);
+
+exit(cmd);
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Library   \n");
+   exit (0);
+}

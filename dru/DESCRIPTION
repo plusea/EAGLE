@@ -1,0 +1,17 @@
+<language de>
+<b>Design-Regeln</b>
+<p>
+In den Design-Regeln ("Design Rules") legt man alle für die Platine und deren
+Fertigung relevanten Parameter fest. Die Überprüfung eines
+Layouts kann jederzeit mit dem <b>Design-Rule-Check</b> (<b>DRC</b>-Befehl)
+erfolgen. Verwenden Sie den Autorouter, sind diese Regeln
+ebenfalls gültig.
+</language>
+<language en>
+<b>Design Rules</b>
+<p>
+All the parameters relevant to the board and its manufacture
+are specified in the Design Rules. The layout can be checked
+any time with the aid of the <b>Design Rule Check</b> (<b>DRC</b>
+command). These rules are also valid for the Autorouter.
+</language>

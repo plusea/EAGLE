@@ -1,0 +1,34 @@
+[Eagle]
+Globals="Globals"
+Desktop="Desktop"
+
+[Globals]
+AutoSaveProject=1
+
+[Win_1]
+Type="Control Panel"
+Loc="0 0 550 320"
+State=2
+Number=0
+
+[Win_2]
+Type="Board Editor"
+Loc="7 24 811 647"
+State=2
+Number=1
+File="hexapod.brd"
+
+[Win_3]
+Type="Schematic Editor"
+Loc="14 48 818 671"
+State=2
+Number=2
+File="hexapod.sch"
+View="-80122 -55229 3966456 2696891"
+Sheet=1
+
+[Desktop]
+Screen="1024 768"
+Window="Win_1"
+Window="Win_2"
+Window="Win_3"

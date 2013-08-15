@@ -1,0 +1,90 @@
+#usage "<b>Export descriptions of devices and packages to HTML</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+string dev[];
+string descript[];
+int    count = 0;
+int    n = 0;
+
+// find some path names ---------
+string ulp_path   = "";
+string eagle_path = ""; // certain only for EAGLE standard installation
+string doc_path   = ""; // certain only for EAGLE standard installation
+string direntry[];
+char   c = '/';
+int    dirnr, j;
+   int pos = strrchr(argv[0], c);
+   if (pos >= 0) {
+      ulp_path = strsub(argv[0], 0, pos + 1);
+      eagle_path = ulp_path;
+      eagle_path = strsub(eagle_path, 0, pos);
+      int pos = strrchr(eagle_path, c);
+      if (pos >= 0) {
+         eagle_path = strsub(eagle_path, 0, pos + 1);
+         dirnr = fileglob(direntry, eagle_path+"*");
+         doc_path = eagle_path;
+         for (j; j<= dirnr; j++) {
+             if (strrstr(direntry[j], "doc/") > 0) {
+                doc_path = direntry[j];
+                }
+             }
+         }
+      }
+
+// find string s2 in s1, and replace with s3
+string replace_string(string s1, string s2, string s3) {
+int i, pos = 1;
+  string a = s1;
+  while (pos >= 0) {
+    pos = strstr(a, s2);
+    if (pos < 0) break;
+    string st1 = strsub(a, 0, pos);
+    string st2 = strsub(a, pos + strlen(s2));
+    a = st1+s3+st2;
+    }
+  return a;
+  }
+
+if (library) library(L) {
+  L.devicesets(D) {
+    count++;
+    dev[count] = D.name;
+    descript[count] = replace_string(D.description, "<p>", "<br>");
+
+    string h = "";
+
+    int l = strlen(dev[count]);
+    string s = strsub(dev[count], 0, 2);
+    string t = strsub(dev[count], 3, l);
+
+    sprintf(h, "<b>DEVICE: %s</b><br>%s<p>\n", dev[count], descript[count]);
+    cmd += h;
+    }
+
+  L.packages(P) {
+    count++;
+    dev[count] = P.name;
+    descript[count] = replace_string(P.description, "<p>", "<br>");
+    string h = "";
+    int l = strlen(dev[count]);
+    string s = strsub(dev[count], 0, 2);
+    string t = strsub(dev[count], 3, l);
+
+    sprintf(h, "<b>PACKAGE: %s</b><br>%s<p>\n", dev[count], descript[count]);
+    cmd += h;
+    }
+
+//define destination path name
+//for a fixed destination, delete next line, uncomment the one after
+//the next line and edit it
+  string dest = dlgFileSave("Save Description File", doc_path+"descript.htm", "*.htm");
+//dest = "c:/eagle/doc/descript.htm";
+
+  output(dest, "wt") {
+     printf(cmd);
+     }
+  }

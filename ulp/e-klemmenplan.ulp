@@ -1,0 +1,1113 @@
+// Klemmenplan/Kabelplan/Brückenplan für Elektro-Projekte
+
+// todo
+// Prüfen ob Netz auf Pin und nicht angeschlossen (pindatabase)
+// x-Verbindungen nach Namen sortieren
+
+string Version = "Version 1.03";
+
+// History
+// 1.03 -- 2009-10-01
+// nicht benötigte "\t\t" im Titel von dlgDialog() entfernt
+//
+// 1.02
+// Verbindungen von Netzen mit mehr als zwei Kontakten werden jetzt in anderer Reihenfolge
+// erstellt (siehe Help)
+//
+// Ist auf einer Seite keine Klemme (Prefix X) vorhanden, werden alle Verbindungen als d
+// (Drahtverbindung) gekennzeichnet
+//
+// 1.01 Keine Fehlermeldung mehr, wenn Packages Smds enthalten
+
+#require 4.9206
+
+#usage "<b>Erstellen eines Klemmenplans</b>\n<p> "
+
+"Mit diesem ULP erstellen Sie einen Klemmenplan, der alle Zweipunktverbindungen "
+"der geladenen Schaltung enthält, also Verbindungen im Schaltschrank, die "
+"üblicherweise mit Drähten realisert werden, und externe, die mit Kabeln "
+"realisiert werden. Interne, externe und Brücken-Verbindungen erscheinen nacheinander in der Liste.<p>"
+"Das Programm sollte erst dann verwendet werden, wenn die "
+"Schaltung nicht mehr oder nur noch geringfügig verändert wird.<p> "
+"Die erzeugte Liste (schaltungsname.vbd) kann in einem Tabellenkalkulationsprogramm "
+"weiter verarbeitet oder mit Hilfe von <i>e-makelist.ulp</i> direkt in die "
+"Schaltungszeichnung importiert werden. <p>"
+"<author>Author: support@cadsoft.de</author>"
+
+string s, cmd, f, ErrCmd;
+string tmpfile, listfile, errorfile, pinfile, vbdfile, klpfile, kapfile, brpfile, pfad;
+numeric string sh, PartPin, SigName, col, row, PartName, PinName;
+numeric string pindatabase[], b[];
+string PartPinSep = " ";
+int    YRef[];
+int    distY, netnr, n, i;
+// Debug
+string DebugString;
+// Variablen für main
+int SelAll = -1, SelConnection = -1, Sort = 0, SortAll = 0, NrLinesListAll;
+numeric string listall[], listsel[], listundo[], listundoOben[];
+string h[];
+// Header-Variablen -------------------------------------------------------------------------------------------
+string head [], SelParam[], ChangeParam[];
+int NrHeader; // Zahl der Rubriken
+enum                         {Nummer, Von, Quelle, Ziel, Nach, Art};
+// head [] enthält ListHeader-Einträge:                                head[Farbe]..
+//                        head[Nummer]..                                   v
+numeric string ListHeader =  "Nummer\tVon\tQuelle\tZiel\tNach\tArt\tBrücke\tFarbe\tQuerschnitt\tKabeltyp\tFunktion";
+// Ende Header-Variablen --------------------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+string HelpText =
+
+"<b>Erstellen des Klemmenplans mit diesem User-Language-Programm (ULP)</b><p> "
+
+"Mit diesem ULP erstellen Sie einen Klemmenplan, der alle Zweipunktverbindungen "
+"der geladenen Schaltung enthält, also Verbindungen im Schaltschrank, die "
+"üblicherweise mit Drähten realisert werden, und externe, die mit Kabeln "
+"realisiert werden. Das Programm sollte erst dann verwendet werden, wenn die "
+"Schaltung nicht mehr oder nur noch geringfügig verändert wird.<p> "
+
+"Die obere Liste (Verbindungsliste) enthält immer alle Verbindungen mit diversen "
+"Parametern. Sie wird abgespeichert, wenn Sie den Button <i>Speichern</i> "
+"anklicken. Der Benutzer hat die Aufgabe, jeder Verbindung die passenden "
+"Parameter (Farbe, Kabeltyp etc.) zuzuordnen. Dabei unterstützt ihn dieses "
+"ULP.<p> "
+"Die erzeugte Liste (schaltungsname.vbd) kann in einem Tabellenkalkulationsprogramm "
+"weiter verarbeitet oder mit Hilfe von <i>e-makelist.ulp</i> direkt in die "
+"Schaltungszeichnung importiert werden. <p>"
+
+"<b>Regeln für das Zeichnen von Mehrfachverbindungen</b><p> "
+
+"Sind mehr als zwei Klemmen im Schaltplan miteinander verbunden, dann gelten folgende Regeln:<p>"
+"Die Klemmen werden der Reihe nach von oben nach unten und von links nach rechts verbunden. "
+"Das heißt, wenn sich auf diese Weise eine Reihenfolge der Klemmen von A, B, C, D ergibt, "
+"dann entstehen die Drahtverbindungen A-B, B-C, C-D. Die Art, wie die Netzlinien gezeichnet sind, "
+"spielt dabei keine Rolle. Sollen die Einzelverbindungen auf andere Art realisiert werden, "
+"etwa A-C, C-B, B-D, dann müssen die Klemmen im Schaltplan entsprechend platziert werden. "
+"Erstreckt sich ein Netz über mehrere Seiten, dann wird die Klemme rechts unten mit der "
+"Klemme rechts oben auf der Folgeseite verbunden.<p>"
+
+"<b>Bedeutung der Spalten</b><p> "
+
+"Die Spalten der beiden dargestellen Listen haben folgende Bedeutung:<p> "
+
+"<b>Nummer</b>: Laufende Nummer, die vom Programm automatisch erzeugt wird.<p> "
+"<b>Von/Nach</b>: 1.A1 bedeutet, die Verbindung startet/endet auf Seite 1, "
+"Rahmenkoordinaten A1.<p> "
+"<b>Quelle/Ziel</b>: F1 1 bedeutet, die Verbindung beginnt/endet an Bauteil F1, Kontakt 1.<p> "
+"<b>Art</b>:<br>"
+"\td  = Drahtverbindung (intern, im Schaltschrank)<br>"
+"\tk  = Kabelverbindung (extern, außerhalb des Schaltschranks)<br>"
+"\tx  = Brücke (Klemme zu Klemme im gleichen Klemmenblock)<p>"
+
+"Das Programm kennzeichnet alle Verbindungen als extern, die auf einer Seite "
+"unterhalb der untersten Klemme (Präfix X..) beginnen.<p>"
+
+"Die Spalteneinträge bis <i>Art</i> werden vom Programm automatisch erzeugt. Die "
+"Spalten rechts davon trägt der Benutzer ein. <i>Art</i> kann ebenfalls verändert werden, "
+"dieser Parameter ist dafür verantwortlich, wo die Verbindung in der Ausgabeliste "
+"erscheint (wenn das Feld leer ist, wird die Zeile nicht ausgegeben).<p> "
+
+"<b>Bedienung des Programms</b><p> "
+
+"In die untere Liste (Auswahlliste) holen Sie eine Gruppe von Verbindungen, die "
+"gemeinsame Parameter erhalten sollen, abhängig davon, welche Auswahl-Parameter "
+"eingetragen sind (Button <i>Holen</i>). Danach setzen sie für die ganze Gruppe "
+"die Werte, die Sie unter <i>Parameter ändern</i> eingetragen haben (Button "
+"<i>Alle eintragen</i> oder <i>Alle außer leere</i>). Dann übertragen Sie die "
+"Parameter in die obere Liste mit dem Button <i>Anwenden</i>. "
+"Sie können die Parameter der selektierten Auswahllisten-Zeile auch in einem "
+"separaten Fenster editieren, das sich nach einem Doppelklick auf diese Zeile öffnet.<p> "
+
+"Beispiel: Es sollen alle Bauteile als Farbe <i>rot</i> erhalten, die mit F "
+"beginnen.<p> "
+"Löschen Sie zunächst die Auswahlliste mit dem Button <i>Alle löschen.</i><p> "
+"Klicken Sie dann <i>Alle *</i> an, damit das Wildcard-Zeichen * in alle "
+"Suchfelder eingetragen wird. In die Felder kann ein sogenannter Wildcard-Text "
+"eingegeben werden, bei dem das Zeichen * beliebige Zeichen ersetzt. Ein Stern "
+"bedeuted, es spielt keine Rolle, wie der Eintrag lautet.<p> "
+"Jetzt tippen Sie in das Feld Quelle/Ziel der Gruppe Auswahl-Parameter F* ein und "
+"klicken dann auf <i>Holen</i>. Alle <i>F..-Bauteile</i> erscheinen jetzt in der "
+"unteren Liste.<p> "
+"Tragen Sie jetzt <i>rot</i> im Feld <i>Farbe</i> des Blocks <i>Parameter "
+"ändern</i> ein, und klicken Sie auf den Button <i>Anwenden</i>. Die Parameter "
+"werden dann in die obere Liste übertragen.<p> "
+
+"<b>Bedeutung der Buttons</b><p> "
+
+"<b>Undo oben</b>: Die letzte Veränderung der Verbindungsliste wird "
+"rückgängig gemacht (nur ein Schritt möglich).<p> "
+
+"<b>Nach oben/Nach unten</b>: Die in der Verbindungsliste selektierte Zeile wird nach "
+"oben oder unten verschoben. Damit ändert sich die laufende Nummer der Zeile. Auf "
+"diese Weise lässt sich die Ausgabereihenfolge verändern.<p> "
+
+"<b>Quelle - Ziel</b>: Quelle und Ziel des selektierten Eintrags in der "
+"Verbindungsliste werden vertauscht.<p> "
+
+"<b>Undo unten</b>: Die letzte Veränderung der Auswahlliste wird "
+"rückgängig gemacht (nur ein Schritt möglich).<p> "
+
+"<b>Eintrag löschen</b>: Die in der Auswahlliste selektierte Zeile wird gelöscht.<p> "
+
+"<b>Alle löschen</b>: Alle Zeilen der Auswahlliste werden gelöscht.<p> "
+
+"<b>Anwenden</b>: Die Parameter der Auswahlliste werden in die entsprechenden "
+"Verbindungen der Verbindungsliste eingetragen: Dabei werden die bisherigen "
+"Parameter (einschließlich leere Felder) überschrieben.<p> "
+
+"<b>Löschen</b>: Alle Felder der Blöcke <i>Auswahl-Parameter</i> und <i>Parameter "
+"ändern</i> werden gelöscht.<p> "
+
+"<b>Alle *</b>: Setze alle Suchfelder auf das Wildcard-Zeichen *. Es sind auch Muster "
+"wie *F* oder *F*1* erlaubt.<p> "
+
+"<b>Holen</b>: Hole alle Verbindungen, bei denen die eingetragenen Suchparameter "
+"zutreffen.  Die Felder untereinander sind UND-Verknüpft, das heißt nur wenn bei "
+"allen Feldern ein entsprechender Eintrag in der Verbindungsliste gefunden wird, "
+"wird die Verbindung in die Auswahlliste geholt. Wenn Sie etwa alle Verbindungen "
+"auf Seite 1 mit der Farbe rot holen wollen, dann tragen Sie in <i>Von/Nach</i> "
+"1.* ein und in das Feld <i>Farbe</i> rot. Alle anderen Felder enthalten *.<br> "
+"Ein <b>Doppelklick</b> auf einen Eintrag in der Verbindungsliste bringt diese "
+"eine Verbindung in die Auswahlliste.<p>"
+
+"<b>Alle eintragen</b>: Die in den Feldern eingetragenen Parameter werden in alle "
+"Verbindungen der Auswahlliste eingetragen (auch leere Felder).<p> "
+
+"<b>Alle außer leere</b>: Die in den Feldern eingetragenen Parameter werden in alle "
+"Verbindungen der Auswahlliste eingetragen. Ist ein Feld im Block <i>Parameter "
+"ändern</i> leer, dann wird das entsprechende Feld in der Auswahlliste nicht "
+"verändert.<p> "
+
+"<b>Fehlerliste</b>: Zeigt eine Liste mit möglichen Fehlern in der Schaltung.<p> "
+
+"<b>Lade ext. Liste</b>: Falls Sie bereits einen Klemmenplan erstellt haben und "
+"anschließend nur noch geringfügige Änderungen durchgeführt wurden (Namen der "
+"Bauteile im Wesentlichen gleich), dann starten Sie das ULP und klicken als "
+"erstes auf diesen Button, damit die bisherigen Parameter in die Verbindungsliste "
+"übernommen werden. Verbindungen, die aufgrund von Schaltungsänderungen nicht "
+"zugeordnet werden können, erscheinen in der Auswahlliste.<p> "
+
+"<b>Abbrechen</b>: Programm ohne Abspeichern des Klemmenplans verlassen. Achtung, Sie "
+"verlieren alle Änderungen am Klemmenplan.<p> "
+
+"<b>Speichern</b>: Abspeichern des Klemmenplans.<p> "
+
+"<b>Ausgabe</b><p>"
+
+"In der vorliegenden Version wird eine tabulatorseparierte Liste ausgegeben, "
+"die Sie entweder in einem Texteditor (mit passend gesetzten Tabulatorwerten) "
+"oder z. B. mit Excel oder OpenOffice weiterverarbeiten können.<p>"
+
+"<b>Verändern der Spaltenüberschriften</b><p> "
+
+"Wenn Sie die Spaltenüberschriften an eigene Bedürfnisse anpassen wollen, "
+"verändern Sie im Programm die Zeile:<p> "
+
+"\"Nummer\\tVon\\tQuelle\\tZiel\\tNach\\tArt\\tBrücke\\tFarbe\\tQuerschnitt\\tKabeltyp\\tFunktion\";<p> "
+
+"Sie können zwischen den Tabulatorzeichen (\\t) die Texte verändern oder neue "
+"Texte hizufügen, z.B.:<p> "
+
+"\"...\\tFunktion\\tBeschreibung\";<p>"
+
+"Achtung: Die Bedeutung der Spalten von <i>Nummer</i> bis <i>Art</i> bleibt "
+"unverändert!<p> "
+;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void SetFileNames(void) { // in Schematic-Kontext aufrufen
+
+  if (!schematic) {
+     // dlgMessageBox("Dieses Programm muss vom Schaltplan-Editor aus aufgerufen werden");
+     exit(1);
+   }
+  schematic(SCH) {
+    tmpfile   = filesetext(SCH.name, ".$$$");
+    listfile  = filesetext(SCH.name, ".kp$");
+    errorfile = filesetext(SCH.name, ".log");
+    pinfile   = filesetext(SCH.name, ".pi$");
+    vbdfile   = filesetext(SCH.name, ".vbd");
+    klpfile   = filesetext(SCH.name, ".klp");
+    kapfile   = filesetext(SCH.name, ".kap");
+    brpfile   = filesetext(SCH.name, ".brp");
+    }
+}
+
+string StripWhiteSpace(string s) { // mit Zusatz: Doppel-Whitespaces im Inneren werden 1 Whitespace
+  int i, n;
+  string t;
+
+  while (s && isspace(s[0]))
+        s = strsub(s, 1);
+  while (s && isspace(s[strlen(s) - 1]))
+        s = strsub(s, 0, strlen(s) - 1);
+// Doppel-Blanks
+  for (i = 0; i < strlen(s); i++) {
+      if   (!isspace(s[i])) t[n++] = s[i];
+      else {
+         if ((strlen(s) > i+1) && isspace(s[i+1]));
+         else t[n++] = s[i];
+         };
+      }
+  s = t;
+
+  return s;
+}
+
+void ErrorMessage(string PartPin, string msg) {
+  string s, sh, col, row;
+  sh  = lookup(pindatabase, PartPin, "Sheet", '\t');
+  col = lookup(pindatabase, PartPin, "Column", '\t');
+  row = lookup(pindatabase, PartPin, "Row", '\t');
+  sprintf(s, "S. %s/%s-%s \tKontakt %s: \t%s", sh, row, col, PartPin, msg);
+  ErrCmd += s + "\n";
+}
+
+/////////////////////////////////////////
+// pindatabase anlegen
+//
+// ermittle Zahl der Wires, die von Pin bzw. x,y aus starten
+int NrOfWiresFromPin(string net, int shnr, int x, int y) {
+  string s;
+  int n;
+  schematic(SCH) {
+    SCH.sheets(SH) {
+      if (SH.number == shnr) {
+      SH.nets(N) {
+            if (N.name == net) {
+               N.segments(SEG) {
+                 SEG.wires(W) {
+                     if (x == W.x1 && y == W.y1 || x == W.x2 && y == W.y2)  { // Wire beginnt an x, y
+                        n++;
+                        }
+                     }
+                 }
+              }
+           }
+        }
+      }
+    }
+  if (net && !n) n = 1; // wenn Pin auf Pin, net vorhanden, deshalb n auf 1
+  return n;
+}
+
+// ermittle Zahl der Wires, die nach dem ersten Wire-Segment vom Pin aus starten
+// Wire vom Pin weg wird mitgezählt
+int NrOfWiresAfterPin(string net, int shnr, int x, int y) {
+  string s;
+  int n, n1, u;
+  schematic(SCH) {
+    SCH.sheets(SH) {
+      if (SH.number == shnr) {
+      SH.nets(N) {
+            if (N.name == net) {
+               N.segments(SEG) {
+                 n1 = 0;
+                 SEG.wires(W) {
+                   if (x == W.x1 && y == W.y1 || x == W.x2 && y == W.y2) { // suche ersten Wire
+                      if (x == W.x1 && y == W.y1) { // stelle Endkoordinaten des Wires fest
+                         x = W.x2; y = W.y2;
+                         }
+                      else {
+                         x = W.x1; y = W.y1;
+                         }
+                      if (y == W.y1 || y == W.y2)  { // Wire-Anfang zweigt nach erstem Wire-Segment über/unter Pin ab
+                         n1 = NrOfWiresFromPin(net, shnr, x, y); // x, y nach erstem Wire-Stück
+                         distY = y; // global, Distanz des Abzweigs in vertikaler Richtung
+                         if (n1) break;
+                         }
+                      }
+
+                   }
+                 }
+              }
+           }
+        }
+      }
+    }
+
+  return n1;
+}
+
+void SetupPinDatabase(void) {
+  string s, cmd, pname;
+  int np, nw;
+  schematic(SCH) {
+   cmd = "PartContact\tNet\tSheet\tRow\tColumn\tx\ty\tNP\tNW\tdistY\n";
+   SCH.sheets(SH) {                     //           # Wires ab Pin
+    SH.parts(PRT) {                     //                # Wires nach erstem Wire
+       PRT.instances (I) {              //                    Abstand des Abzweigs vertikal
+          I.gate.symbol.pins(P) {
+            if (P.contact) {
+               pname = P.contact.name;
+               }
+            else {
+               pname = P.name;
+               }
+            np = NrOfWiresFromPin(P.net, SH.number, P.x, P.y); nw = NrOfWiresAfterPin(P.net, SH.number, P.x, P.y);
+            sprintf(s, "%s%s%s\t%s\t%d\t%s\t%s\t%d\t%d\t", PRT.name, PartPinSep, pname, P.net, SH.number, I.row, I.column, P.x, P.y); cmd += s;
+            sprintf(s, "\t%d\t%d\t%d\n", np, nw, distY); cmd += s;
+            // Hier lassen sich alle Pin-Parameter prüfen
+            if (nw > 3 || np > 2) {
+               sprintf(s, "S. %d/%s-%s \tKontakt %s %s: \tMehr als zwei Abzweigungen vom Kontakt!", SH.number, I.row, I.column, PRT.name, pname);
+               ErrCmd += s + "\n";
+               }
+            // todo: Prüfen, ob ein nicht angeschlossenes Netz auf dem Pin liegt
+            }
+          }
+       }
+     }
+    }
+  strsplit(pindatabase, cmd, '\n');
+  output(pinfile, "wtD") {
+    printf(cmd);
+    }
+}
+//ende pindatabase /////////////////////////////////
+
+void ReadConnects(void) {
+  int i, n, x[], y[], index[], loopcnt;
+  numeric string Part_Pin[];
+  schematic(SCH) {
+   SCH.nets(NET) {
+         loopcnt = 0;
+         SCH.sheets(SH) {
+             SH.nets(N) {
+               if (NET.name == N.name) {
+                  loopcnt++;
+                  if (loopcnt == 1) {
+                     cmd += "\n";
+                     }
+                  n = 0;
+                  N.segments(SEG) {
+                    SEG.pinrefs(P) {
+                        if (P.pin.contact) {
+                           Part_Pin[n] = P.part.name + "\t" + P.pin.contact.name;
+                           }
+                        else {
+                           Part_Pin[n] = P.part.name + "\t" + P.pin.name;
+                           }
+                        x[n] = P.pin.x; y[n] = INT_MAX - P.pin.y; // scanne Klemmen von oben nach unten
+                        ++n;
+                        }
+                    }
+                   sort(n, index, x, y, Part_Pin); // sortiere PartPin innerhalb eines Segments nach Position
+                                                   // scanne Klemmen: erst alle y auf x = 0 etc.
+                   for (int i = 0; i < n; ++i) {
+                       sprintf(s, "%s\t", Part_Pin[index[i]]); cmd += s;
+                       }
+                  }
+              }
+            }
+       }
+    }
+  output(tmpfile, "wtD") {
+    printf(cmd);
+    }
+}
+
+// Ermittle y-Wert für Trennung zwischen interner und externer Verdrahtung
+// Hier: Klemme mit niedrigstem y pro Sheet
+void GetYReference(void) { // YRef[] liefert: #sheets, yref-sh1, yref-sh2 ..
+  int sn, ymin, klemme_exists;
+  schematic(S) {
+    S.sheets(SH) {
+      sn++;
+      ymin = INT_MAX;
+      klemme_exists = 0;
+      SH.parts(P) {
+        P.instances(I) {
+          if (strchr(I.name, 'X') == 0) { // Alle, die mit X beginnen
+             ymin = min(ymin, I.y); // sprintf(s, "%s: %d\n", I.name, ymin); ErrCmd += s;
+             klemme_exists = 1;
+             }
+          }
+        }
+      YRef[SH.number] = ymin; // sprintf(s, "  %d: %d\n", SH.number, YRef[SH.number]); ErrCmd += s;
+      if (klemme_exists == 0) {
+         YRef[SH.number] = 0;
+         }
+      }
+    YRef[0] = sn;
+    }
+}
+
+string AssembleNetLine(string line){
+  int i, j, n, npar, snr;
+  string s, st, lxy, rxy;
+  string ps[];   // Einzelparameter, Source
+  string pair[]; // Name-Pin-Paar mit Blank
+  string x[];
+  string y[];
+  string distY[];// Distanz der Abzweigung vom Pin
+  string np[];   // # Wires ab Pin
+  string nw[];   // # Wires ab erstem Wire-Segment nach Pin
+  string Sep = "\t";
+  string net[];
+  string sht[];
+  string row[];
+  string col[];
+
+  npar  = strsplit(ps, line, '\t');
+  for (j = 0; j < npar/2;) { // Zusammenfassen von Part und Pin mit Blank
+    pair[j++] = ps[n++] + " " + ps[n++];
+    }
+  n = 0;
+  while (pair[n]) { // Sammeln der Pin-Informationen
+//      np[n]  = lookup(pindatabase, PartPin, "NP", '\t');
+        x[n]   = lookup(pindatabase, pair[n], "x", '\t');
+        y[n]   = lookup(pindatabase, pair[n], "y", '\t');
+        net[n] = lookup(pindatabase, pair[n], "Net", '\t');
+        sht[n] = lookup(pindatabase, pair[n], "Sheet", '\t');
+        row[n] = lookup(pindatabase, pair[n], "Row", '\t');
+        col[n] = lookup(pindatabase, pair[n], "Column", '\t');
+        if (!sht[n]) {
+           sht[n] = "?";
+           col[n] = "?";
+           row[n] = "?";
+           }
+        n++;
+     }
+  if (npar <= 2) {
+     ErrorMessage(pair[0], "Netz nicht abgeschlossen!");
+     return "";
+     }
+
+  netnr++;
+  sprintf (lxy, "%08d %08d", strtol(x[0]), strtol(y[0]));
+  sprintf (rxy, "%08d %08d", strtol(x[1]), strtol(y[1]));
+
+  // Art voranstellen
+  snr = min (strtol(sht[0]), strtol(sht[1])); // Sheetnr
+  if (strtol(y[0]) <=  YRef[snr] && strtol(y[1]) > YRef[snr]) ErrorMessage(pair[0], "Verbindung nicht eindeutig (intern oder extern?)");
+  if (strtol(y[0]) >   YRef[snr]) s = "d\t";
+  if (strtol(y[0]) <=  YRef[snr]) s = "k\t";
+  if (strsub(pair[0], 0, 1) == "X" &&  ps[0] == ps[2]) s = "x\t";
+  st += s;
+
+  if ((lxy > rxy && strtol(sht[0]) == strtol(sht[1])) || (strtol(sht[0]) > strtol(sht[1]))) { // Reihenfolge Quelle-Ziel etc. tauschen
+     sprintf(s, "%03d%s", strtol(sht[1]), Sep); st+= s;
+     sprintf(s, "%08d %08d%s%08d %08d%s", strtol(x[1]), strtol(y[1]), Sep, strtol(x[0]), strtol(y[0]), Sep); st += s;
+     sprintf(s, "%d%s%s%s%s.%s%s%s", netnr, Sep, net[1], Sep, sht[1], row[1], col[1], Sep); st += s + pair[1] + Sep + pair[0];
+     sprintf(s, "%s%s.%s%s", Sep, sht[0], row[0], col[0]); st += s;
+     }
+  else {
+     sprintf(s, "%03d%s", strtol(sht[0]), Sep); st+= s;
+     sprintf(s, "%08d %08d%s%08d %08d%s", strtol(x[0]), strtol(y[0]), Sep, strtol(x[1]), strtol(y[1]), Sep); st += s;
+     sprintf(s, "%d%s%s%s%s.%s%s%s", netnr, Sep, net[0], Sep, sht[0], row[0], col[0], Sep); st += s + pair[0] + Sep + pair[1];
+     sprintf(s, "%s%s.%s%s", Sep, sht[1], row[1], col[1]); st += s;
+     }
+
+  st += "\n";
+  if (npar <= 4) return st; // nur Zweipunktverbindung
+  if (npar > 4) { // jeden mit dem Nachbarn verbinden (gleiches y hat Vorrang)
+     n = 2;
+     while (pair[n]) {
+       netnr++;
+       sprintf (lxy, "%08d %08d", strtol(x[n-1]), strtol(y[n-1]));
+       sprintf (rxy, "%08d %08d", strtol(x[n]), strtol(y[n]));
+
+       // Art voranstellen
+       snr = min (strtol(sht[n-1]), strtol(sht[n])); // Sheetnr
+       if (strtol(y[n-1]) <= YRef[snr] && strtol(y[n]) > YRef[snr]) ErrorMessage(pair[n-1], "Verbindung nicht eindeutig (intern oder extern?)");
+       if (strtol(y[n-1]) >  YRef[snr]) s = "d\t";
+       if (strtol(y[n-1]) <= YRef[snr]) s = "k\t";
+       if (strsub(pair[n-1], 0, 1) == "X" &&  ps[(n-1)*2] == ps[n*2]) s = "x\t";
+       st += s;
+
+       if ((lxy > rxy && strtol(sht[n-1]) == strtol(sht[n])) || (strtol(sht[n-1]) > strtol(sht[n]))) {
+          sprintf(s, "%03d%s", strtol(sht[n]), Sep); st+= s;
+          sprintf(s, "%08d %08d%s%08d %08d%s", strtol(x[n]), strtol(y[n]), Sep, strtol(x[n-1]), strtol(y[n-1]), Sep); st += s;
+          sprintf(s, "%d%s%s%s%s.%s%s%s", netnr, Sep, net[n], Sep, sht[n], row[n], col[n], Sep); st += s + pair[n] + Sep + pair[n-1];
+          sprintf(s, "%s%s.%s%s", Sep, sht[n-1], row[n-1], col[n-1]); st += s;
+          }
+       else {
+          sprintf(s, "%03d%s", strtol(sht[n-1]), Sep); st+= s;
+          sprintf(s, "%08d %08d%s%08d %08d%s", strtol(x[n-1]), strtol(y[n-1]), Sep, strtol(x[n]), strtol(y[n]), Sep); st += s;
+          sprintf(s, "%d%s%s%s%s.%s%s%s", netnr, Sep, net[n-1], Sep, sht[n-1], row[n-1], col[n-1], Sep); st += s + pair[n-1] + Sep + pair[n];
+          sprintf(s, "%s%s.%s%s", Sep, sht[n], row[n], col[n]); st += s;
+          }
+       st += "\n";
+       n++;
+       }
+     }
+  return st;
+}
+
+// Verbindungsliste aufbereiten
+void ChangeList(void) {
+  int i, j, nl, np;
+  numeric string a[], c[], s, sh;
+  GetYReference(); // YRef[sheet] enthält y von unterstem Klemmenkontakt
+
+  nl = fileread(a, tmpfile);
+  // sort(n, a);
+  output(tmpfile, "wtD") { // leere Zeilen entfernen
+    for (i = 0; i < nl; i++) {
+        if (a[i]) printf("%s\n",a[i]);
+        }
+    }
+  nl = fileread(a, tmpfile);
+  if (nl > 0) {
+     output(listfile, "wtD") { // sheetnr \t x y \t x y \t Nummer \t Netz \t Von ..
+       for (i = 0; i < nl; i++) {
+           a[i] = StripWhiteSpace(a[i]); // a[] enthält urspr. Connect-Zeilen
+           b[i] = a[i];                  // b[] enthält Zeilen eines Signals und wird verändert (global)
+           b[i] = AssembleNetLine(b[i]);
+           if (b[i]) printf("%s", b[i]); // b[0..nl] -> alle Zeilen eines Signals geordnet nach Pos.
+           }
+       }
+     }
+  nl = fileread(a, listfile); // sortieren nach sheetnr und erstem x y \t xy
+  sort(nl, a);
+  output(listfile, "wtD") {
+    for (i = 0; i < nl; i++) {
+        strsplit(c, a[i], '\t');
+        printf("%d\t%s\t%s\t%s\t%s\t%s\n", i + 1, c[6], c[7], c[8], c[9], c[0]);
+//      printf("%s\n", a[i]);
+        }
+  }
+}
+
+//************** von Main benutzt **********************
+
+void PushUndo(void) {
+  int i;
+  while (listundo[i]) {
+    listundo[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listsel[i]) {
+    listundo[i] = listsel[i];
+    i++;
+    }
+}
+
+void PullUndo(void) {
+  int i;
+  while (listsel[i]) {
+    listsel[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listundo[i]) {
+    listsel[i] = listundo[i];
+    i++;
+    }
+}
+
+void PushUndoOben(void) {
+  int i;
+  while (listundoOben[i]) {
+    listundoOben[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listall[i]) {
+    listundoOben[i] = listall[i];
+    i++;
+    }
+}
+
+void PullUndoOben(void) {
+  int i;
+  while (listundoOben[i]) {
+    i++;
+    }
+  if (i == 0) return; // wenn alte Liste leer (nach dem Start)
+  i = 0;
+  while (listall[i]) {
+    listall[i] = "";
+    i++;
+    }
+  i = 0;
+  while (listundoOben[i]) {
+    listall[i] = listundoOben[i];
+    i++;
+    }
+}
+
+// Lies rohe Verbindungsliste
+void ReadList(void) {
+  int i, j, np;
+  numeric string h[];
+  NrLinesListAll = fileread(listall, listfile) -1;
+  for (i = 0; i < NrLinesListAll; i++) {
+      while (strsplit(h, listall[i], '\t') < NrHeader) listall[i] += "\t";
+      listsel[i] = listall[i];     // erst, Auswahliste füllen, damit Listen gleich formatiert werden
+      }
+}
+
+void ShowErrorList(void) {
+  dlgDialog("Fehlerliste") {
+     dlgHBoxLayout dlgSpacing(600);
+     dlgHBoxLayout{
+        dlgTextEdit(ErrCmd);
+        }
+     dlgHBoxLayout {
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("&Hilfe") dlgMessageBox( "Überprüfen Sie die in der Liste aufgeführten Kontakte!\n"
+                                               "Sie können die Fehlerliste auch editieren und mit Cut&Paste \n"
+                                               "zu einem Texteditor übertragen."
+                                             );
+        dlgPushButton("+OK") dlgAccept();
+        }
+     };
+}
+
+// Übertrage eine Verbindung in Auswahlliste, wenn noch nicht vorhanden
+void TransferOneEntry(int Sel) {
+  int i, n;
+  string h1[], h2[];
+  PushUndo();
+  strsplit(h1, listall[Sel], '\t');
+  while(listsel[i]) {
+    strsplit(h2, listsel[i], '\t');
+    if (h1[Nummer]   == h2[Nummer]   &&
+        h1[Von]      == h2[Von]      &&
+        h1[Quelle]   == h2[Quelle]   &&
+        h1[Ziel]     == h2[Ziel]     &&
+        h1[Nach]     == h2[Nach]
+       )
+       return;  // Zeilen identisch -> kein neuer Eintrag (nur feste Felder bis Nach geprüft)
+    i++;
+    }
+  i = 0;
+  while(listsel[i++]) { // finde letzte Zeile
+    }
+  listsel[i-1] = listall[Sel];
+}
+
+// Lösche eine Verbindung aus Auswahlliste
+void DelOneEntry(int Sel) {
+  int i, n, imax;
+  string x[];
+  PushUndo();
+  if (Sel < 0) return;
+  //SelConnection = -1;
+  while(listsel[i++]) {
+    }
+  imax = i;
+  for (i = 0; i < imax; i++) {
+      if (i <= Sel) {
+         x[i] = listsel[i];
+         }
+      else {
+         x[i-1] = listsel[i];
+         }
+      }
+   listsel[imax-1] = ""; listsel[imax] = "";
+   imax = imax -1;
+  for (i = 0; i < imax; i++) {
+      listsel[i] = x[i];
+      }
+}
+
+void SetSelParams(string c) {
+  int i;
+  for (i = 1; i < NrHeader; i++) {
+      SelParam[i] = c;             // einige nicht relevant
+      }
+}
+
+void SetChangeParams(string c) {
+  int i;
+  for (i = 1; i < NrHeader; i++) {
+      ChangeParam[i] = c;          // einige nicht relevant
+      }
+}
+
+// Suche mit Wildcard *
+int WildMatch(string wild, string st) { // wild = Suchmuster, st = zu durchsuchender Sting
+  int wx, sx, pos;
+  string sw, ss;
+  wild = StripWhiteSpace(wild);
+  st   = StripWhiteSpace(st);
+  if (wild == st || wild == "*") return 1;
+  if (!wild && st) return 0;
+  if (strchr(wild, '*') < 0 && strlen(wild) > 0 && st == "") return 0; // wild exist., aber kein *
+  if (strlen(wild) > 0 && st == "") { // wild exist. mit Nicht-*-Zeichen, st = ""
+     pos = 0;
+     sw = wild;
+     while (sw[pos]) { // Zeichen außer * in wild vorhanden -> return 0
+       if (sw[pos] != '*') return 0;
+       pos++;
+       }
+     return 1; // wild ist **...
+     }
+  while (wild[wx] && st[sx]) {
+    while (wild[wx] != '*') { // vgl. bis zum nächsten *
+      if (wild[wx++] != st[sx++]) return 0;
+      if (sx == strlen(st) && !(wx == strlen(wild))) {         // Ende von st erreicht aber nicht Ende von wild
+         if (wild[wx] == '*' && !wild[wx+1])         return 1; // nächstes Zeichen von wild ist *, dann Stringende
+         else                                        return 0;
+      }
+      if (wx == strlen(wild) && !(sx == strlen(st))) return 0; // Ende von wild erreicht aber nicht Ende von st
+      if (wx == strlen(wild) && (sx == strlen(st)))  return 1; // Ende von wild erreicht aber nicht Ende von st
+      }
+    // jetzt kommt zwingend ein *, wx steht auf Index von *
+    if (wx == strlen(wild) - 1)   return 1; // Ende von wild erreicht und *
+    wx++;
+    while (st[sx] != wild[wx] && wild[wx] != '*') {            // bis zum Match nach Stern
+       if (sx == strlen(st) -1)   return 0; // Ende von st erreicht ohne Match
+       sx++;
+      }
+    }
+   return 1;
+}
+
+// Von Verbindungs- in Auswahlliste
+void TransferMatchingEntries(void) {
+  int iall, i, match1, match2, np;
+  string h[]; // Einzelparameter
+  PushUndo();
+  SelParam[Quelle] = strupr(SelParam[Quelle]);
+  SelParam[Von]    = strupr(SelParam[Von]);
+  while (listall[iall]) {
+      match1 = 0;
+      np = strsplit(h, listall[iall], '\t'); // bisherige Einzelpar. in h[]
+      if ((WildMatch(SelParam[Quelle], h[Quelle]) || WildMatch(SelParam[Quelle], h[Ziel]))   &&
+          (WildMatch(SelParam[Von],    h[Von])    || WildMatch(SelParam[Von],    h[Nach]))
+         ) match1 = 1;
+      match2 = 0;
+      for (i = Nach + 1; i < NrHeader; i++) {
+          if (WildMatch(SelParam[i], h[i]) ) {
+             match2 = 1;
+             }
+          else {
+             match2 = 0;
+             break;
+             }
+          }
+      if (match1 && match2) { // nach break
+         TransferOneEntry(iall);
+         }
+      iall++;
+      }
+  SelAll = -1;
+}
+
+// Lösche alle Verbindungen aus Auswahlliste
+void DelAllEntries(void) {
+  int i;
+  PushUndo();
+  while(listsel[i]) {
+    listsel[i] = "";
+    i++;
+    }
+}
+
+void ChangeOneEntry(int Sel) {
+  int i;
+  PushUndo();
+  for (i = Nach + 1; i < NrHeader; i++) {
+      h[i] = ChangeParam[i];
+      }
+  listsel[Sel] = strjoin(h, '\t');
+}
+
+void EditOneEntry(int Sel) {
+  int i, np;
+  np = strsplit(h, listsel[Sel], '\t');
+  for (i = np; i < NrHeader; i++) h[i] = "";
+  dlgDialog("Editiere Verbindungs-Parameter") {
+     for (i = Nach + 1; i < NrHeader; i++) {
+         ChangeParam[i] = h[i];
+         }
+     for (i = Nach + 1; i < NrHeader; i++) {
+         dlgHBoxLayout {
+            dlgLabel(head[i] + "\t");
+            dlgStringEdit(ChangeParam[i]);
+           }
+         }
+     dlgHBoxLayout {
+         dlgStretch(1);
+         dlgPushButton("-Abbrechen")  dlgReject();
+         dlgPushButton("+OK")  {dlgAccept(); ChangeOneEntry(Sel);}
+       }
+    };
+}
+
+void CopyChangeParams(int all) {
+  int i, j;
+  string h[];
+  PushUndo();
+  while (listsel[j]) {
+    strsplit(h, listsel[j], '\t');
+    for (i = Nach + 1; i < NrHeader; i++) {
+        if (ChangeParam[i] != "" || all)
+        h[i] = ChangeParam[i];
+        }
+    listsel[j] = strjoin(h, '\t');
+    j++;
+    }
+}
+
+void ApplyChanges(void) {
+  int j, k;
+  string ls[], la[];
+  PushUndoOben();
+  while (listall[j]) {
+    strsplit(la, listall[j], '\t');           // bisherige Zeile in la[]
+    k = 0;
+    while (listsel[k]) {
+      strsplit(ls, listsel[k], '\t');         // neue Zeile in ls[]
+      if ((la[Quelle] == ls[Quelle] && la[Ziel] == ls[Ziel]) ||
+          (la[Quelle] == ls[Ziel] && la[Ziel] == ls[Quelle])
+         ) {                                  // Match-Zeile gefunden
+         ls[0] = la[0];                       // alte Nummer verwenden
+         listall[j] = strjoin(ls, '\t');
+         }
+      k++;
+      }
+    j++;
+    }
+}
+
+// Übertrage Parameter der externen Liste nach listall und lösche die verwendeten aus listsel
+void ApplyChangesOldList(void) {
+  int j, k;
+  string ls[], la[];
+  while (listall[j]) {
+    strsplit(la, listall[j], '\t');           // bisherige Zeile in la[]
+    k = 0;
+    while (listsel[k]) {
+      strsplit(ls, listsel[k], '\t');         // neue Zeile in ls[]
+      if ((la[Quelle] == ls[Quelle] && la[Ziel] == ls[Ziel]) ||
+          (la[Quelle] == ls[Ziel] && la[Ziel] == ls[Quelle])
+         ) {                                  // Match-Zeile gefunden
+         ls[0] = la[0];                       // alte Nummer verwenden
+         listall[j] = strjoin(ls, '\t');
+         DelOneEntry(k);
+         break;
+         }
+      k++;
+      }
+    j++;
+    }
+}
+
+int LoadOldListOk(void) {
+  int LoadOk;
+  dlgDialog("Verbindungsliste laden") {
+     dlgHBoxLayout dlgSpacing(400);
+     dlgHBoxLayout {
+        dlgTextView ( "Achtung, wenn Sie eine vorhandene Verbindungsliste laden, "
+                      "werden alle bisher definierten Parameter der Verbindungen "
+                      "überschrieben, die in der aktuellen und der gespeicherten "
+                      "Liste vorhanden sind!\n\n"
+                      "Nicht gefundene Verbindungen sind im Auswahlfenster aufgelistet.\n\n"
+                    );
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+Abbrechen") dlgReject();
+        dlgPushButton("-Weiter") {LoadOk = 1; dlgAccept();}
+        }
+     };
+  if (LoadOk) return 1;
+  else return 0;
+}
+
+int CancelOk(void) {
+  int CancelOk;
+  dlgDialog("Programm verlassen") {
+     dlgHBoxLayout dlgSpacing(400);
+     dlgHBoxLayout {
+        dlgTextView ( "Wenn Sie das Programm abbrechen, verlieren Sie alle veränderten Parametereinträge!\n\n"
+                      "Abbrechen?"
+                    );
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+Nein") dlgReject();
+        dlgPushButton("-Ja") {CancelOk = 1; dlgAccept();}
+        }
+     };
+  if (CancelOk) return 1;
+  else return 0;
+}
+
+
+void ApplyOldList(void) {
+  int NrLines;
+  string FileName = dlgFileOpen("Verbindungsliste/Klemmenplan/Kabelplan/Brückenplan wählen", vbdfile, "Klemmenplan-Dateien (*.vbd);;Alle Dateien (*)");
+  if (FileName) {
+     PushUndo();
+     PushUndoOben();
+     DelAllEntries();
+     NrLines = fileread(listsel, FileName);
+     DelOneEntry(0); // Header löschen
+     ApplyChangesOldList();
+     }
+}
+
+void SaveList(void) {
+  int i;
+  schematic(SCH) vbdfile = filesetext(SCH.name, ".vbd");
+  string FileName = dlgFileSave("Speichere Verbindungsliste", vbdfile);
+  if (FileName) {
+     string a[];
+     output(FileName, "wt") {
+       printf ("%s\n", ListHeader);
+       while (listall[i]) {
+         printf("%s\n", listall[i]); // "%s" um Probleme zu vermeiden, wenn listall '%' enthält
+         i++;
+         }
+       }
+     }
+}
+
+void MoveDown(int Sel) {
+  int i;
+  string hi[], lo[], tmp;
+  if (listall[Sel + 1]) {
+     PushUndoOben();
+     while (listsel[i]) listsel[i++] = "";
+     strsplit(hi, listall[Sel + 1], '\t');
+     strsplit(lo, listall[Sel], '\t');
+     tmp = hi[Nummer]; hi[Nummer] = lo[Nummer]; lo[Nummer] = tmp; // vertausche Rang
+     listall[Sel] = strjoin(hi, '\t');
+     listall[Sel + 1] = strjoin(lo, '\t');
+     SelAll = Sel + 1;
+     }
+}
+
+void MoveUp(int Sel) {
+  int i;
+  string hi[], lo[], tmp;
+  if (Sel > 0) {
+     PushUndoOben();
+     while (listsel[i]) listsel[i++] = "";
+     strsplit(hi, listall[Sel], '\t');
+     strsplit(lo, listall[Sel - 1], '\t');
+     tmp = hi[Nummer]; hi[Nummer] = lo[Nummer]; lo[Nummer] = tmp; // vertausche Rang
+     listall[Sel] = strjoin(lo, '\t');
+     listall[Sel - 1] = strjoin(hi, '\t');
+     SelAll = Sel - 1;
+     }
+}
+
+void ChangeSourceDest (int Sel) {
+  string h[], s;
+  if (Sel < 0) return;
+  PushUndoOben();
+  strsplit(h, listall[Sel], '\t');
+  s = h[Quelle]; h[Quelle] = h[Ziel]; h[Ziel] = s;
+  listall[Sel] = strjoin(h, '\t');
+}
+
+void ShowHelp(void) {
+  dlgDialog("Hilfe") {
+     dlgHBoxLayout dlgSpacing(600);
+     dlgHBoxLayout{
+        dlgVBoxLayout dlgSpacing(600);
+        dlgTextView(HelpText);
+        }
+     dlgHBoxLayout {
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+OK") dlgAccept();
+        }
+     };
+}
+
+//*****************************************************
+void ShowUserInterface(void) {
+dlgDialog("Klemmenplan/Kabelplan erstellen - " + Version) {
+   dlgHBoxLayout dlgSpacing(800);
+  dlgGroup("") {
+     dlgLabel("Verbindungsliste");
+     dlgListView(ListHeader, listall, SelAll, SortAll) TransferOneEntry(SelAll);
+     dlgSpacing(10);
+     }
+  dlgGroup("") {
+     dlgLabel("Auswahlliste");
+     dlgListView(ListHeader, listsel, SelConnection, Sort) EditOneEntry(SelConnection);
+     dlgHBoxLayout {
+        dlgPushButton("Undo oben")       PullUndoOben();
+        dlgPushButton("Nach oben")       MoveUp(SelAll);
+        dlgPushButton("Nach unten")      MoveDown(SelAll);
+        dlgPushButton("Quelle <-> Ziel") ChangeSourceDest(SelAll);
+        dlgStretch(1);
+        dlgPushButton("Undo unten")      PullUndo();
+        dlgPushButton("Eintrag löschen") DelOneEntry(SelConnection);
+        dlgPushButton("Alle löschen")    DelAllEntries();
+        dlgPushButton("Anwenden")        ApplyChanges();
+        }
+    }
+
+  dlgSpacing(10);
+  dlgHBoxLayout {
+     dlgGroup("Auswahl-Parameter") {
+        dlgHBoxLayout {
+           dlgVBoxLayout {
+              dlgHBoxLayout {
+                 dlgLabel(head[Quelle] + "/" + head[Ziel] + "\t");
+                 dlgStringEdit(SelParam[Quelle]);
+                 }
+              dlgHBoxLayout {
+                 dlgLabel(head[Von] + "/" + head[Nach] + "\t");
+                 dlgStringEdit(SelParam[Von]);
+                 }
+            dlgGroup("") {
+               }
+             }
+            dlgVBoxLayout {
+               for (i = Nach + 1; i < NrHeader; i++) {
+                   dlgHBoxLayout {
+                      dlgLabel(head[i] + "\t");
+                      dlgStringEdit(SelParam[i]);
+                      }
+                   }
+               dlgHBoxLayout {
+                   dlgStretch(1);
+                   dlgPushButton("Löschen") SetSelParams("");
+                   dlgPushButton("Alle *")  SetSelParams("*");
+                   dlgPushButton("Holen")  TransferMatchingEntries();
+                   }
+               }
+           }
+        }
+    dlgGroup("Parameter ändern") {
+       for (i = Nach + 1; i < NrHeader; i++) {
+           dlgHBoxLayout {
+              dlgLabel(head[i] + "\t");
+              dlgStringEdit(ChangeParam[i]);
+             }
+           }
+       dlgHBoxLayout {
+           dlgStretch(1);
+           dlgPushButton("Löschen")          SetChangeParams("");
+           dlgPushButton("Alle eintragen")   CopyChangeParams(1);
+           dlgPushButton("Alle außer leere") CopyChangeParams(0);
+         }
+       }
+     }
+
+  dlgHBoxLayout {
+     dlgPushButton("&Hilfe") ShowHelp();
+     dlgStretch(1);
+     dlgPushButton("Fehlerliste") ShowErrorList();
+     dlgPushButton("Lade ext. Liste")  if (LoadOldListOk()) ApplyOldList();
+     dlgPushButton("-Abbrechen")       if (CancelOk())      dlgReject();
+     dlgPushButton("+Speichern")       SaveList();
+     }
+   };
+}
+//***************** Main ******************************
+NrHeader = strsplit(head, ListHeader, '\t');
+SetFileNames();
+SetupPinDatabase();
+ReadConnects();
+ChangeList();
+output(errorfile, "wt") printf(ErrCmd + "\n"); // hier sind alle Listen fertig (*.kp$ ohne Parameter-Einträge
+// Oberfläche
+ReadList();
+ShowUserInterface();
+

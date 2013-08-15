@@ -1,0 +1,29 @@
+#usage "<b>Edit previous library in current directory</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+if  (library) {
+   library(L) {
+      string a[], cmd;
+      string Lname = L.name;
+      string lbr_path = filedir(L.name);
+      int n = fileglob(a, lbr_path + "*.lbr");
+      if (n) {
+         for (int xl = 0; xl <= n; xl++) {
+            if (Lname == a[xl]) {
+               if (xl > 0) {
+                  string h;
+                  sprintf(h, "OPEN '" + lbr_path + filename(a[xl - 1]) + "';");
+                  cmd += h;
+                  exit (cmd);
+                  }
+               }
+            }
+         }
+      }
+   exit (0);
+   }
+
+else dlgMessageBox("Start this ULP from a Library", "OK");

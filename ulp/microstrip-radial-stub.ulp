@@ -1,0 +1,298 @@
+#usage "<qt><b>Draw a Microstrip Radial Stub</b><p>"
+       "RUN microstrip-radial-stub"
+       "<p>"
+       "<author>Author: support@cadsoft.de </author></qt>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+int grid = 1;
+string GridUnit[]  = { "MIC", "MM", "MIL", "INCH" };
+real   GridWidth[] = { 10.2,  0.0102, 0.4,  0.0004 }; // default by grid
+if (board)     { board(B)     grid = B.grid.unit; }
+if (library)   { library(L)   grid = L.grid.unit; }
+
+real   width   = GridWidth[grid];
+string layer   = "1";
+string gridstr = "";
+real   D       = 0.01;
+real   L       = 0.99;
+
+real   angle        = 30.0;       // angle of Stub
+int    arcres       = angle / 3;  // resolution of angle in steps
+real   angle_offset = 0.0;        // rotate the complete stub
+int    polygon      = 1;          // draw as polygon
+real   arcsinXa;
+real   arcsinYa;
+real   arcsinXe;
+real   arcsinYe;
+real   ox, oy;                    // offset X Y
+string signame = "";
+
+string cmd_draw_info = "<img src=microstrip-radial-stub.bmp>";
+string s;
+string h;
+string err = " ";
+
+int rank = 0;
+if (board) rank = 1;
+string polyinit;
+sprintf (polyinit, "CHANGE ORPHANS ON;\nCHANGE POUR SOLID;\nCHANGE RANK %d;\n", rank);
+
+real wwidth2;
+real RadiusL;
+real angleL;
+
+int test = 0;
+
+// ******************** Functions ****************************
+string esigname(string sig) {
+  if (sig) sig = "'" + sig + "'";
+  return sig;
+}
+
+// ************************************************************************
+string xy_arc( real ang, real radius, real offx, real offy) {
+  string xy;
+  real rad = PI / 180 * ang;
+  sprintf(xy, "(%.4f %.4f)\n",
+                    offx + (cos(rad) * radius),
+                    offy + (sin(rad) * radius) );
+  return xy;
+}
+
+real bogenY2( real ang, real radius) {
+  real rad = PI / 180 * (ang/2);
+  return sin(rad) * radius;
+}
+
+real bogenX( real ang, real radius) {
+  real rad = PI / 180 * (ang/2);
+  return cos(rad) * radius;
+}
+
+
+// ***
+real Xneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+   real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+   real WinkelNeu;		/* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+   if ((Xalt > Xorigin) && (Yalt >= Yorigin))	{		/* Quadrant 1 */
+      WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt < Xorigin) && (Yalt >= Yorigin))	{		/* Quadrant 2 */
+      WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt < Xorigin) && (Yalt < Yorigin))	{		/* Quadrant 3 */
+      WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt > Xorigin) && (Yalt < Yorigin))	{		/* Quadrant 4 */
+      WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt == Xorigin) && (Yalt == Yorigin))	{		/* Ursprung   */
+      WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt == Xorigin) && (Yalt > Yorigin))	{		/* 90°        */
+      WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));	}
+   if ((Xalt == Xorigin) && (Yalt < Yorigin))	{		/* 270°       */
+      WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad)); }
+}
+
+real Yneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+   real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+   real WinkelNeu;          /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+   if ((Xalt > Xorigin) && (Yalt >= Yorigin))	{	/* Quadrant 1 */
+       WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt < Xorigin) && (Yalt >= Yorigin))	{	/* Quadrant 2 */
+       WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt < Xorigin) && (Yalt < Yorigin))	{	/* Quadrant 3 */
+       WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt > Xorigin) && (Yalt < Yorigin))	{	/* Quadrant 4 */
+       WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt == Xorigin) && (Yalt == Yorigin))	{	/* Ursprung   */
+       WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt == Xorigin) && (Yalt > Yorigin))	{	/* 90°        */
+       WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+   if ((Xalt == Xorigin) && (Yalt < Yorigin))	{	/* 270°       */
+       WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad)); }
+}
+
+
+real radiusY(real ang, real rry) {
+  real r = (rry*2) / sin(PI / 180 * ang) / 2;
+  return r;
+}
+
+
+string check_values(void) {
+  string error = "";
+  wwidth2 = width/2;
+  RadiusL = D + L - wwidth2;
+  angleL = angle - (width / ((RadiusL * 2 * PI) / 360));
+  arcsinXa = bogenX( angle, D) + wwidth2;
+  arcsinYa = bogenY2( angle, D + wwidth2) - wwidth2;
+  arcsinXe = arcsinXa;
+  arcsinYe = -arcsinYa;
+  if (arcsinYa < 0) {
+    sprintf(error, "<nobr><img src=warning.bmp>Set D to %.4f while W %.4f &lt; wire width %.4f",
+                   radiusY(angle/2, wwidth2), bogenX( angle, D), width );
+  }
+  return error;
+}
+
+
+// *** draw arc ***
+string draw_arc(int draw_resol, real draw_radius, real draw_arc_degree, real draw_ang_off, real offx, real offy) {
+  real start_arc_degree = draw_ang_off - draw_arc_degree/2;
+  if  (start_arc_degree < 0) start_arc_degree += 360;
+  real end_arc_degree   = start_arc_degree + draw_arc_degree;
+  real arcstep          = (end_arc_degree - start_arc_degree) / draw_resol;
+  string e;
+  for (real winkel = start_arc_degree; winkel < end_arc_degree + 0.0001; winkel += arcstep) {
+    e += xy_arc(winkel, draw_radius, offx, offy) ;
+  }
+  return e;
+}
+
+
+// *************************************************************
+void menue(void) {
+  dlgDialog("Radial Stub") {
+    dlgHBoxLayout {
+      dlgSpacing(150);
+      dlgLabel("<nobr>Measures in <b>" + GridUnit[grid] + "</b> (Grid)");
+      dlgStretch(1);
+      dlgGroup(" Draw as") {
+        dlgVBoxLayout {
+          dlgRadioButton("W&ire", polygon);
+          dlgRadioButton("&Polygon", polygon);
+          dlgHBoxLayout {
+            dlgLabel("&Width");
+            dlgSpacing(15);
+            dlgRealEdit(width);
+            dlgStretch(1);
+          }
+        }
+      }
+    }
+    dlgHBoxLayout {
+      dlgLabel(cmd_draw_info, 1);
+      dlgGridLayout {
+        dlgCell( 1, 1) dlgLabel(" ");
+        dlgCell( 2, 1) dlgLabel("Lay&er");
+        dlgCell( 2, 2) dlgStringEdit(layer);
+        dlgCell( 2, 3) dlgSpacing(8);
+        if (board) {
+          dlgCell( 2, 4) dlgLabel("&Signal name");
+          dlgCell( 2, 5) dlgStringEdit(signame);
+        }
+        dlgCell( 6, 1) dlgLabel("&L");
+        dlgCell( 6, 2) dlgRealEdit(L, 0, +1600);
+        dlgCell( 7, 1) dlgLabel("&D");
+        dlgCell( 7, 2) dlgRealEdit(D, 0, +1600);
+        dlgCell( 9, 1) dlgLabel("&Angle");
+        dlgCell( 9, 2) dlgRealEdit(angle, 0.0, 180.0);
+        dlgCell( 9, 4) dlgLabel("Angle &offset °");
+        dlgCell( 9, 5) dlgRealEdit(angle_offset, 0.0, 360.0);
+        dlgCell( 10, 1) dlgLabel("A&rc res.");
+        dlgCell( 10, 2) dlgIntEdit(arcres, 6, 180);
+        dlgCell( 11, 2) dlgLabel(" (steps)");
+
+        dlgCell( 14, 4) dlgLabel("&X offset");
+        dlgCell( 14, 5) dlgRealEdit(ox, -800.0, +800.0);
+        dlgCell( 15, 4) dlgLabel("&Y offset");
+        dlgCell( 15, 5) dlgRealEdit(oy, -800.0, +800.0);
+      }
+      dlgStretch(1);
+    }
+    dlgHBoxLayout {
+      dlgVBoxLayout {
+        dlgSpacing(50);
+      }
+      dlgLabel(err, 1);
+      dlgStretch(1);
+    }
+    dlgHBoxLayout {
+      dlgPushButton("+OK") {
+        err = check_values();
+        if (err) {
+          if (dlgMessageBox(err, "Accept", "No") == 0) {
+            D = radiusY(angle/2, wwidth2);
+            err = "";
+          }
+          else if (dlgMessageBox("Confirm (the values) ?", "Yes", "No") == 0) dlgAccept();
+        }
+        else dlgAccept();
+      }
+      dlgPushButton("-Cancel") { dlgReject(); exit(0); }
+      dlgStretch(1);
+    }
+  };
+  return;
+}
+
+// ***** Main ******
+void main(void) {
+  if (library) signame = "";
+  menue();
+  if (angle_offset) {
+    real nX = Xneu(arcsinXa, arcsinYa, 0, 0, angle_offset);
+    real nY = Yneu(arcsinXa, arcsinYa, 0, 0, angle_offset);
+    arcsinXa = nX;
+    arcsinYa = nY;
+    nX = Xneu(arcsinXe, arcsinYe, 0, 0, angle_offset);
+    nY = Yneu(arcsinXe, arcsinYe, 0, 0, angle_offset);
+    arcsinXe = nX;
+    arcsinYe = nY;
+  }
+  esigname(signame);
+  gridstr = GridUnit[grid];
+
+  sprintf(s, "SET WIRE_BEND 2;\n");
+  if (gridstr) s += "GRID " + gridstr + ";\n";
+  if (layer)   s += "CHANGE LAYER " + layer + ";\n";
+  sprintf(h, "CHANGE WIDTH %.4f;\n", width);
+  s += h;
+  if (polygon) {
+    s += polyinit;
+    sprintf(h, "POLY %s ", signame );
+  }
+  else sprintf(h, "WIRE %s ", signame );
+  s += h;
+  sprintf(h, " (%.4f %.4f)", arcsinXa + ox, arcsinYa + oy);  // *** draw sinw ***
+  s += h;
+  sprintf(h, " (%.4f %.4f)", arcsinXe + ox, arcsinYe + oy);
+  s += h;
+  s += draw_arc(arcres, RadiusL, angleL, angle_offset, ox, oy);  // *** draw arc ***
+  sprintf(h, " (%.4f %.4f)", arcsinXa + ox, arcsinYa +oy);
+  s += h;
+  if (gridstr) {
+    sprintf(h, ";\nGRID LAST;\n");
+    s += h;
+  }
+  if (test) if (dlgMessageBox(s, "OK", "ESC") != 0) exit (-1);
+  exit (s);
+}

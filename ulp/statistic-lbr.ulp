@@ -1,0 +1,831 @@
+#usage "<b>RUN Library statistics</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+string Revision = "1.07";
+               //  1.02   2005.12.11  alf@cadsoft.de
+               //  1.03   2006.05.18  Delete unused PAC/SYM
+               //  1.04   2006.09.25  Check/Delete empty user layer
+               //                     Edit selected element
+               //  1.05   2007.02.07  Check defined User layer also < 100
+               //  1.06   2007.02.08  check apostroph in Pac- Sym-Name vor Delete
+               //  1.07   2007.11.26  correct Text in function del_unused_sym(void)    "Delete all unused symbols?"
+
+
+string src_dev[];
+string src_pac[];
+string src_sym[];
+string src_tec[];
+string src_var[];
+string src_pref[];
+
+int    cnt_variant[];
+
+string srt_dev[];
+string srt_pac[];
+string srt_sym[];
+string srt_tec[];
+string srt_var[];
+string srt_pref[];
+
+
+string srt_drills[];
+
+int    index_dev[];
+int    index_pac[];
+int    index_sym[];
+int    index_tec[];
+int    index_var[];
+int    index_pref[];
+int    index_dril[];
+
+int    drills[];
+int    cntdril[];
+
+int    cntdev    = 0;
+int    cntpac    = 0;
+int    cntsym    = 0;
+int    cnttec    = 0;
+int    cntvar    = 0;
+int    cntpref   = 0;
+int    cntdrills = 0;
+
+int    used_pac[];
+int    used_sym[];
+
+string unUsed_pac[];
+string unUsed_sym[];
+
+string usedlabel = " ";
+string used[] = { "used in Deviceset\tcnt" };
+
+int    cntclearused = 0;  // Error in dlgListView,
+                          // clear all strings in array befor use dlgListView
+                          // if used a second time less string entry
+
+
+int    cntUnUsed_pac = 0;
+int    cntUnUsed_sym = 0;
+
+int    us, up;
+string PackInfo = " \n \n \n ";
+string SymbolInfo  = " \n \n";
+
+string defined_layers[] = {"" };
+int    cnt_deflayer = 0;
+
+string used_layers[] = {"" };
+int    cnt_used_layers = 0;
+
+string user_layers[] = {"" };
+int    cnt_user_layers = 0;
+
+string usedTechno[];
+int    nusedTecno;
+
+string usedVar[];
+int    nusedVar;
+
+string Empty = "~empty~";
+int    nusedPrefix;
+
+string edittype;
+
+
+// *** --- Functions --- ***
+
+void checkprefix(string prefix) {
+  if (!prefix) prefix = Empty;
+  int f = 0;
+  for (int n = 0; n <= cntpref; n++) {
+    if (src_pref[n] == prefix) {
+      f = 1;
+      break;
+    }
+  }
+  if (f) return;
+  src_pref[cntpref] = prefix;
+  cntpref++;
+  return;
+}
+
+void checkVariant(string var) {
+  int f = 0;
+  for (int n = 0; n <= cntvar; n++) {
+    if (src_var[n] == var) {
+      f = 1;
+      break;
+    }
+  }
+  if (f) return;
+  src_var[cntvar] = var;
+  cntvar++;
+  return;
+}
+
+void checkTechno(string tech) {
+  string techno[];
+  int t = strsplit(techno, tech, ' ');
+  for (int xt = 0; xt < t; xt++) {
+    int notf = 1;
+    for (int n = 0; n <= cnttec; n++) {
+      if (src_tec[n] == techno[xt]) {
+        notf = 0;
+        break;
+      }
+    }
+    if (notf) {
+      src_tec[cnttec] = techno[xt];
+      cnttec++;
+    }
+  }
+  return;
+}
+
+
+void TecInfo(string tec) {
+  library(L) {
+    usedlabel = "Used Technoligies ";
+    used[0] = "Deviceset";
+    used[1] = "";
+    nusedTecno = 1;
+    L.devicesets(DS) {
+      DS.devices(D) {
+        string techno[];
+        int cnt = strsplit(techno, D.technologies, ' ');
+        for (int n = 0; n <= cnt; n++) {
+          if (techno[n] == tec) {
+
+          sprintf(used[nusedTecno], "%s", DS.name);
+            nusedTecno++;
+            used[nusedTecno] = "";
+            break;
+          }
+        }
+      }
+    }
+  }
+  return;
+}
+
+
+void VarInfo(string var) {
+  library(L) {
+    usedlabel = "Used Variants ";
+    used[0] = "Deviceset";
+    used[1] = "";
+    nusedVar = 1;
+    L.devicesets(DS) {
+      DS.devices(D) {
+        if (D.name == var) {
+          sprintf(used[nusedVar], "%s", DS.name);
+          nusedVar++;
+          used[nusedVar] = "";
+        }
+      }
+    }
+  }
+  return;
+}
+
+void PrefInfo(string pref) {
+  if (!pref) pref = Empty;
+  library(L) {
+    usedlabel = "Used Prefix " + pref;
+    used[0] = "Deviceset";
+    used[1] = "";
+    nusedPrefix = 1;
+    L.devicesets(DS) {
+      string pfx = DS.prefix;
+      if (!pfx) pfx = Empty;
+      if(pfx == pref) {
+        sprintf(used[nusedPrefix], "%s", DS.name);
+        nusedPrefix++;
+        used[nusedPrefix] = "";
+      }
+    }
+  }
+  return;
+}
+
+
+void checkUsedPac(string pac) {
+  int f = 0;
+  for (int n = 0; n <= cntpac; n++) {
+    if (src_pac[n] == pac) {
+      used_pac[n]++;
+      return;
+    }
+  }
+  dlgMessageBox("Pac not found!", "OK");
+}
+
+
+void checkUsedSym(string sym) {
+  int f = 0;
+  for (int n = 0; n <= cntsym; n++) {
+    if (src_sym[n] == sym) {
+      used_sym[n]++;
+      return;
+    }
+  }
+  dlgMessageBox("Sym not found!", "OK");
+}
+
+
+string addApostroph(string s) {
+  int len = strlen(s);
+  int pos = strrchr(s, '\'');
+  string l;
+  if (pos >= 0) {
+    l = strsub(s, 0, pos) + "'" + strsub(s, pos, len-pos);
+    s = l;
+  }
+  return s;
+}
+
+
+void del_unused_pac(void) {  // 2006.05.09
+  if (dlgMessageBox("Delete all unused packages?", "YES", "NO") != 0) return;
+  string cmd, s;
+  for (int n = 0; n < cntUnUsed_pac; n++) {
+    sprintf(s, "REMOVE '%s.PAC';\n", addApostroph(unUsed_pac[n]));
+    cmd += s;
+  }
+  sprintf(s, "RUN '%s';\n", argv[0]);
+  cmd += s;
+  exit(cmd);
+}
+
+
+void del_unused_sym(void) {  // 2007.11.26
+  if (dlgMessageBox("Delete all unused symbols?", "YES", "NO") != 0) return;
+  string cmd, s;
+  for (int n = 0; n < cntUnUsed_sym; n++) {
+    sprintf(s, "REMOVE '%s.SYM';\n", addApostroph(unUsed_sym[n]));
+    cmd += s;
+  }
+  sprintf(s, "RUN '%s';\n", argv[0]);
+  cmd += s;
+  exit(cmd);
+}
+
+
+// ** ------------------------ **
+void checkDrill(int drill) {
+  int nof = 1;
+  for (int n = 0; n < cntdrills; n++) {
+    if (drills[n] == drill) {
+      nof = 0;
+      cntdril[n]++;
+      break;
+    }
+  }
+  if (nof) {
+    drills[cntdrills] = drill;
+    cntdril[cntdrills]++;
+    cntdrills++;
+  }
+  return;
+}
+
+
+int countPAD(UL_PACKAGE P) {
+  int Pads;
+  P.contacts(C) {
+    if (C.pad) {
+      Pads++;
+    }
+  }
+  return Pads;
+}
+
+
+int countSMD(UL_PACKAGE P) {
+  int Smds;
+  P.contacts(C) {
+    if (C.smd) {
+      Smds++;
+    }
+  }
+  return Smds;
+}
+
+int countHOLE(UL_PACKAGE P) {
+  int Holes;
+  P.holes(H) {
+    Holes++;
+  }
+  return Holes;
+}
+
+
+int countPIN(UL_SYMBOL S) {
+  int Pins;
+  S.pins(P) {
+    Pins++;
+  }
+  return Pins;
+}
+
+
+int newUsed(string use_name) {
+  int new = 1;
+  int n = 0;
+  do {
+    if (used[n] == use_name) {
+      new = 0;
+      break;
+    }
+    n++;
+  } while(used[n]);
+  return new;
+}
+
+
+void syminfo(string Name_and_count) {
+  string symbolname[];
+  int n = strsplit(symbolname, Name_and_count, '\t');
+  usedlabel = "<b>" + symbolname[0]+".SYM</b>";
+  used[0] = "used in Deviceset\tcnt";
+  int usedcount = 1;
+  used[usedcount] = "";
+  for (int u = 1; u < cntclearused; u++) used[u] = ""; // while error in dlgListView()
+                                                       // clear all strings in array 03.05.2005 alf
+  library(L) {
+    L.symbols(S) {
+      if (S.name == symbolname[0]) {
+         sprintf(SymbolInfo, "<b>%s</b><br>%3d Pin in symbol", S.name, countPIN(S) );
+      }
+    }
+    L.devicesets(DS) {
+      int cntinuse;
+      int new = 0;
+      DS.gates(G) {
+        if (G.symbol.name == symbolname[0]) {
+          if (newUsed(DS.name)) {
+            used[usedcount] = DS.name;
+            usedcount++;
+            used[usedcount] = "";
+            new++;
+          }
+          cntinuse++;
+        }
+      }
+      if (new) {
+        string h;
+        sprintf(h, "\t%d", cntinuse);
+        used[usedcount-1] += h;
+      }
+    }
+  }
+  used[usedcount] = "";
+  if (cntclearused < usedcount) cntclearused = usedcount;
+  return;
+}
+
+
+void pacinfo(string Name_and_count) {
+  string packname[];
+  int n = strsplit(packname, Name_and_count, '\t');
+  usedlabel = "<b>" + packname[0]+".PAC</b>";
+  used[0] = "used in Deviceset\tcnt";
+  int usedcount = 1;
+  used[usedcount] = "";
+  for (int u = 1; u < cntclearused; u++) used[u] = ""; // while error in dlgListView()
+                                                       // clear all strings in array 03.05.2005 alf
+  library(L) {
+    L.packages(P) {
+      if (P.name == packname[0]) {
+         int pac_rect;
+         int pac_circle;
+         int pac_wire;
+         int pac_poly;
+         int pac_text;
+         P.rectangles(R) pac_rect++;
+         P.circles(C) pac_circle++;
+         P.wires(W) pac_wire++;
+         P.polygons(P) pac_poly++;
+         P.texts(T) pac_text++;
+         sprintf(PackInfo, "Rects = %d\nCircles = %d\nWires = %d\nPolygons = %d\nTexts = %d", pac_rect, pac_circle, pac_wire, pac_poly, pac_text);
+         dlgMessageBox(PackInfo, "OK");
+         sprintf(PackInfo, "<b>%s</b><br>%3d Pad<br>%3d Smd<br>%3d Hole", P.name, countPAD(P), countSMD(P), countHOLE(P) );
+      }
+    }
+    L.devicesets(DS) {
+      int cntinuse;
+      int new = 0;
+      DS.devices(D) {
+        if (D.package) {
+          if (D.package.name == packname[0]) {
+            if (newUsed(DS.name)) {
+              used[usedcount] = DS.name;
+              usedcount++;
+              used[usedcount] = "";
+              new++;
+            }
+            cntinuse++;
+          }
+        }
+      }
+      if (new) {
+        string h;
+        sprintf(h, "\t%d", cntinuse);
+        used[usedcount-1] += h;
+      }
+    }
+  }
+  used[usedcount] = "";
+  if (cntclearused < usedcount) cntclearused = usedcount;
+  return;
+}
+
+
+void drillinfo(int Drill) {
+  sprintf(usedlabel, "<b>Drill %.4f mm</b>", u2mm(Drill));
+  used[0] = "used in Package\tcnt";
+  int usedcount = 1;
+  used[usedcount] = "";
+  for (int u = 1; u < cntclearused; u++) used[u] = ""; // while error in dlgListView()
+                                                       // clear all strings in array 03.05.2005 alf
+  library(L) {
+    L.packages(P) {
+      int cntinuse;
+      int new = 0;
+      P.contacts(C) {
+        if (C.pad) {
+          if (C.pad.drill == Drill) {
+            if (newUsed(P.name)) {
+              used[usedcount] = P.name;
+              usedcount++;
+              used[usedcount] = "";
+              new++;
+            }
+            cntinuse++;
+          }
+        }
+      }
+      if (new) {
+        string h;
+        sprintf(h, "\t%d", cntinuse);
+        used[usedcount-1] += h;
+      }
+    }
+  }
+  used[usedcount] = "";
+  if (cntclearused < usedcount) cntclearused = usedcount;
+
+  return;
+}
+
+
+void collectLbr(UL_LIBRARY L) {
+  L.packages(P) {
+    status(P.name+".PAC");
+    src_pac[cntpac] = P.name ;
+    cntpac++;
+    src_pac[cntpac] = "";
+    P.contacts(C) {
+      if (C.pad) {
+        checkDrill(C.pad.drill);
+      }
+    }
+  }
+
+  status("");
+  L.symbols(S) {
+    src_sym[cntsym] = S.name ;
+    cntsym++;
+    src_sym[cntsym] = "";
+  }
+
+  L.devicesets(DS) {
+    src_dev[cntdev] = DS.name ;
+    checkprefix(DS.prefix);
+    DS.devices(D) {
+      checkVariant(D.name);
+      checkTechno(D.technologies);
+      if (D.package) {
+        checkUsedPac(D.package.name);
+      }
+      cnt_variant[cntdev]++;
+    }
+    cntdev++;
+    src_dev[cntdev] = "";
+    DS.gates(G) {
+      checkUsedSym(G.symbol.name);
+    }
+  }
+  return;
+}
+
+void sort_data(void) {
+  int n;
+  string s;
+  sort (cntdev, index_dev, src_dev, cnt_variant);  // 2005.11.15 alf
+  sort (cntvar, index_var, src_var);
+  sort (cnttec, index_tec, src_tec);
+  sort (cntpref, index_pref, src_pref);
+  sort (cntpac, index_pac, src_pac, used_pac);
+  sort (cntsym, index_sym, src_sym, used_sym);
+  sort (cntdrills, index_dril, drills, cntdril);
+
+  for (n = 0; n < cntdev; n++) {
+    srt_dev[n] = src_dev[index_dev[n]];
+  }
+  for (n = 0; n < cntvar; n++) {
+    srt_var[n] = src_var[index_var[n]];
+  }
+  for (n = 0; n < cnttec; n++) {
+    srt_tec[n] = src_tec[index_tec[n]];
+  }
+  for (n = 0; n < cntpref; n++) {
+    srt_pref[n] = src_pref[index_pref[n]];
+  }
+  for (n = 0; n < cntpac; n++) {
+    if (used_pac[index_pac[n]]) sprintf(s, "\t%d", used_pac[index_pac[n]]);
+    else {
+      s = "\t -";
+      unUsed_pac[cntUnUsed_pac] = src_pac[index_pac[n]];
+      cntUnUsed_pac++;
+    }
+    srt_pac[n] = src_pac[index_pac[n]] + s;
+  }
+  for (n = 0; n < cntsym; n++) {
+    if (used_sym[index_sym[n]]) sprintf(s, "\t%d", used_sym[index_sym[n]]);
+    else {
+      s = "\t -";
+      unUsed_sym[cntUnUsed_sym] = src_sym[index_sym[n]];
+      cntUnUsed_sym++;
+    }
+    srt_sym[n] = src_sym[index_sym[n]] + s;
+  }
+  for (n = 0; n < cntdrills; n++) {
+    sprintf(srt_drills[n], "%.4f\t%d", u2mm(drills[index_dril[n]]), cntdril[index_dril[n]]);
+  }
+  return;
+}
+
+
+// 2006.09.19 check used user layer
+string check_userlayer(string ulay) {
+  string use_user_layer = "";
+  int l = strtol(ulay);
+  library(L) {
+    L.packages(PAC) {
+      status(" check "+PAC.name+".PAC");
+      int use = 0;
+      PAC.wires(W)      if (W.layer == l) { use++; break; }
+      PAC.circles(C)    if (C.layer == l) { use++; break; }
+      PAC.rectangles(R) if (R.layer == l) { use++; break; }
+      PAC.polygons(P)   if (P.layer == l) { use++; break; }
+      PAC.texts(T)      if (T.layer == l) { use++; break; }
+      if (use) use_user_layer += PAC.name + ".PAC\n";
+    }
+    L.symbols(S) {
+      status(" check "+S.name+".SYM");
+      int use = 0;
+      S.wires(W)      if (W.layer == l) { use++; break; }
+      S.circles(C)    if (C.layer == l) { use++; break; }
+      S.rectangles(R) if (R.layer == l) { use++; break; }
+      S.polygons(P)   if (P.layer == l) { use++; break; }
+      S.texts(T)      if (T.layer == l) { use++; break; }
+      if (use) use_user_layer += S.name + ".SYM\n";
+    }
+    status("");
+  }
+  return use_user_layer;
+}
+
+
+void exit_edit(string text, string ulay) {
+  string s[], l[];
+  int n = strsplit(s, text, '\n');
+  int u = strsplit(l, ulay, ' ');
+  exit("EDIT "+s[0]+";\nLAYER "+l[0]+";");
+}
+
+void check_used(string ulay) {
+  string use_user_layer = check_userlayer(ulay);
+  if (use_user_layer) {
+    dlgDialog("Statistic") {
+      dlgLabel("Use layer " + ulay);
+      dlgTextView(use_user_layer);
+      dlgHBoxLayout {
+        dlgPushButton("+OK") dlgAccept();
+        dlgPushButton("Edit") { dlgAccept(); exit_edit(use_user_layer, ulay); }
+        dlgStretch(1);
+      }
+    };
+  }
+  else if (dlgMessageBox(ulay + "\nthis layer is not used!", "OK", "Delete") != 0) {
+    string cmd;
+    sprintf(cmd, "LAYER -%d;\nRUN '%s'\n", strtol(ulay), argv[0]);
+    exit(cmd);
+  }
+  return;
+}
+
+
+// 2006.09.19 delete unused user layer
+void del_unused_userlayer(void) {
+  string cmd;
+  for (int n = 0; n < cnt_user_layers; n++) {
+    if (!check_userlayer(user_layers[n])) {
+      string s;
+      sprintf(s, "LAYER -%d;\n", strtol(user_layers[n]) );
+      cmd += s;
+    }
+  }
+  if (cmd) exit(cmd+"RUN '"+argv[0]+"';");
+  return;
+}
+
+
+void menue_1(void) {
+  int seldev  = 0;
+  int seltec  = 0;
+  int selvar  = 0;
+  int selpref = 0;
+  int selsym  = -1;
+  int selpac  = -1;
+  int seldril = -1;
+  int selused = 0;
+
+  string ndev, nvar, ntec, npac, nsym, ndril, cupac, cusym, culay, npref;
+  string usedVariants = " select Device";
+  sprintf(ndev, "%3d", cntdev);
+  sprintf(nvar, "%3d", cntvar);
+  sprintf(ntec, "%3d", cnttec);
+  sprintf(npac, "%3d", cntpac);
+  sprintf(nsym, "%3d", cntsym);
+  sprintf(npref, "%3d", cntpref);
+  sprintf(ndril, "%3d", cntdrills);
+  sprintf(cupac, "%3d", cntUnUsed_pac);
+  sprintf(cusym, "%3d", cntUnUsed_sym);
+  sprintf(culay, "%3d", cnt_user_layers); // 2006.09.19
+  int listsort = 0;
+  int sellay, selulay;
+
+  int Result = dlgDialog("Library statistic") {
+    dlgHBoxLayout {
+      dlgVBoxLayout dlgSpacing(400);
+      dlgGridLayout {
+        dlgCell( 0,1) dlgSpacing(200);
+        dlgCell( 0,2) dlgSpacing(100);
+
+        dlgCell( 1,0) { dlgLabel(ndev); dlgLabel("&Devices"); }
+        dlgCell( 1,1) dlgComboBox(srt_dev, seldev) {
+                       sprintf(usedVariants, "%d Variant ", cnt_variant[seldev]);
+                       usedlabel = "Devicesets ";
+                       used[0] = "Deviceset";
+                       used[1] = srt_dev[seldev];
+                       used[2] = "";
+                       edittype = ".DEV";
+                     }
+        dlgCell( 1,2) dlgLabel(usedVariants, 1);
+
+        dlgCell( 2,0) { dlgLabel(nvar); dlgLabel("&Variants"); }
+        dlgCell( 2,1) dlgComboBox(srt_var, selvar) { VarInfo(srt_var[selvar]); edittype = ".DEV"; }
+
+        dlgCell( 3,0) { dlgLabel(ntec); dlgLabel("&Technoligies"); }
+        dlgCell( 3,1) dlgComboBox(srt_tec, seltec) { TecInfo(srt_tec[seltec]); edittype = ".DEV"; }
+
+        dlgCell( 4,0) { dlgLabel(npref); dlgLabel("&Prefix"); }
+        dlgCell( 4,1) dlgComboBox(srt_pref, selpref) { PrefInfo(srt_pref[selpref]); edittype = ".DEV"; }
+
+        dlgCell( 5,0) dlgLabel("&Used Layers");
+        dlgCell( 5,1) dlgComboBox(used_layers, sellay);
+
+        if (cnt_deflayer) {
+          dlgCell( 6,1) dlgLabel("<font color = red>+ defined layer</font>");
+          dlgCell( 7,0) dlgLabel("&+defined Layers");
+          dlgCell( 7,1) dlgComboBox(defined_layers, sellay);
+        }
+
+
+        if (cnt_user_layers) {
+          dlgCell( 8,1) dlgLabel("<font color = red>Layer user defined</font>");
+          dlgCell( 9,1) dlgComboBox(user_layers, selulay) check_used(user_layers[selulay]);
+          dlgCell( 9,2) if (user_layers[0]) { dlgLabel(culay); dlgPushButton("DELETE") del_unused_userlayer(); }    // 2006.09.19
+        }
+
+        dlgCell( 10,1) dlgVBoxLayout {
+                         dlgLabel(usedlabel, 1);
+                         dlgListView("", used, selused, listsort);
+                       }
+        dlgCell( 10,2) dlgVBoxLayout {
+                         dlgSpacing(18);
+                         dlgHBoxLayout {
+                           dlgPushButton("EDIT") {
+                             string e[]; int n = strsplit(e, used[selused], '\t');
+                             if(selused) { dlgAccept(); exit("EDIT '"+e[0]+edittype+"'"); }
+                             else {
+                               if (!used[1]) dlgMessageBox("!List is empty.\nSelect a Device, Variant, Technology, Symbol or Package.", "OK");
+                               else if (selused < 1) {
+                                 if (edittype == ".DEV") dlgMessageBox("Select a Device", "OK");
+                                 if (edittype == ".PAC") dlgMessageBox("Select a Package", "OK");
+                               }
+                             }
+                           }
+                           dlgStretch(1);
+                         }
+                         dlgStretch(1);
+                       }
+
+        dlgCell( 11,0) { dlgLabel(cupac); dlgLabel("Unused &Package"); }
+        dlgCell( 11,1) dlgComboBox(unUsed_pac, up);
+        dlgCell( 11,2) dlgHBoxLayout {
+                         if (cntUnUsed_pac) { dlgPushButton("DELETE") del_unused_pac(); }  // 2006.05.09
+                         dlgStretch(1);
+                       }
+
+        dlgCell( 12,0) { dlgLabel(cusym); dlgLabel("Unused &Symbol"); }
+        dlgCell( 12,1) dlgComboBox(unUsed_sym, us);
+        dlgCell( 12,2) dlgHBoxLayout {
+                         if (cntUnUsed_sym) { dlgPushButton("DELETE") del_unused_sym(); }  // 2006.05.09
+                         dlgStretch(1);
+                       }
+      }
+      dlgVBoxLayout {
+        dlgLabel("S&ymbols " + nsym);
+        dlgListView("Symbol\tUsed", srt_sym, selsym) {
+          syminfo(srt_sym[selsym]);
+          selpac  = -1;
+          seldril = -1;
+          edittype = ".DEV";
+        }
+        dlgLabel(SymbolInfo, 1);
+        dlgPushButton("EDIT .sym") {
+          if(selsym >= 0) {
+            dlgAccept();
+            edittype = ".SYM";
+            string e[]; int n = strsplit(e, srt_sym[selsym], '\t');
+            exit("EDIT '"+e[0]+edittype+"'");
+          }
+          else dlgMessageBox("First select a Symbol", "OK");
+        }
+      }
+      dlgVBoxLayout {
+        dlgLabel("P&ackages " + npac);
+        dlgListView("Package\tUsed", srt_pac, selpac) {
+          pacinfo(srt_pac[selpac]);
+          selsym  = -1;
+          seldril = -1;
+          edittype = ".DEV";
+        }
+        dlgLabel(PackInfo, 1);
+        dlgPushButton("EDIT .pac") {
+          if(selpac >= 0) {
+            dlgAccept();
+            edittype = ".PAC";
+            string e[]; int n = strsplit(e, srt_pac[selpac], '\t');
+            exit("EDIT '"+e[0]+edittype+"'");
+          }
+          else dlgMessageBox("First select a Package", "OK");
+        }
+      }
+      dlgVBoxLayout {
+        dlgLabel("D&rills " + ndril);
+        dlgListView("Drill mm\tUsed", srt_drills, seldril) {
+          drillinfo(drills[index_dril[seldril]]);
+          selsym = -1;
+          selpac = -1;
+          edittype = ".PAC";
+        }
+      }
+      dlgVBoxLayout dlgSpacing(300);
+    }
+
+      dlgSpacing(12);
+      dlgHBoxLayout {
+      dlgPushButton("+OK") dlgAccept();
+      dlgStretch(1);
+    }
+  };
+  return ;
+}
+
+
+// main
+if (library) library(L) {
+  status("Layers");
+  L.layers(LAY) {
+    if (LAY.used) {
+      sprintf(used_layers[cnt_used_layers], "%d %s", LAY.number, LAY.name);
+      cnt_used_layers++;
+    }
+    if (LAY.number >= 100) {
+      sprintf(user_layers[cnt_user_layers], "%d %s", LAY.number, LAY.name);
+      cnt_user_layers++;
+    }
+    if (LAY.number == 50 || LAY.number > 52 && LAY.number < 91 || LAY.number > 96 ) {
+      sprintf(defined_layers[cnt_deflayer], "%d %s", LAY.number, LAY.name);
+      cnt_deflayer++;
+    }
+  }
+  collectLbr(L);
+  sort_data();
+  menue_1();
+}
+

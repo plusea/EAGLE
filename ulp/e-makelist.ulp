@@ -1,0 +1,285 @@
+// Generiere Liste als EAGLE-Script
+
+string Version = "Listenausgabe Version 1.0";
+
+#require 4.9206
+
+#usage "<b>Erstellen von Listen auf EAGLE-Schaltplanseiten (nicht mit EAGLE Light)</b>\n<p> "
+
+"Mit diesem ULP erstellen Sie aus den Dateien, die von den Programmen "
+"<i>e-klemmenplan</i> und <i>e-brueckenverwaltung</i> erzeugt wurden, "
+"Listen, die Bestandteil eines Schaltplans sind.<p>"
+
+"Außerdem können Sie mit diesem Programm Schaltplanseiten ab einer "
+"bestimmten Seite bequem löschen.<p>"
+
+"<author>Author: support@cadsoft.de</author>"
+
+int NrLines, i, j, np, maxlen[], PrintOff[], xstart, ystart, xtextpos, ypos, size;
+int shnr, linedist, layer, lowmargin, linelength, fieldmarginchar, width, width_head;
+int x_margin, y_margin, xright, MaxSize, linemil, delpage;
+numeric string lines[], head[], item[];
+string FileName, FileTmp, Cmd, s, t, headline, fext, MaxSizeStr, CmdDel;
+
+///////////////////////////////////////////////////////////////////////////////////////
+// Folgende Parameter können vom Benutzer angepasst werden
+// Alle Maße in mil = 1/1000 Zoll; 40 mil ist ca. 1 mm
+fext = ".vbd";
+xstart = 150;        // Trennlinien-Abstand vom linken Rand
+xright = 11200;      // x-Koordinate für Trennlinie rechts
+ystart = 7750;       // y-Koordinate für erste (obere) Trennlinie
+lowmargin = 435;     // y-Koordinate für letztmögliche (unterste) Trennlinie
+linedist = 200;      // Zeilenabstand
+fieldmarginchar = 2; // zusätzliche Zeichen pro Feld (Abstand)
+size = 140;          // Texthöhe (wird intern optimiert)
+width = 7;           // Strichstärke für Trennlinien
+width_head = 10;     // Strichstärke für Trennlinien der Kopfzeile
+layer = 94;          // wenn ein anderer Layer angegeben wird, muss er definiert sein
+///////////////////////////////////////////////////////////////////////////////////////
+
+xtextpos = xstart + size;
+ypos = ystart;
+x_margin = size * fieldmarginchar/2; // Abstand zu Linien in mil
+y_margin = (linedist - size)/2; // Versatz der Linien gegen Text vertikal
+// shnr wird in SetFileNames auf höchste Seitennummer + 1 gesetzt
+
+string HelpText =
+
+"<b>Erstellen von Listen auf EAGLE-Schaltplanseiten (nicht mit EAGLE Light)</b><p> "
+
+"Mit diesem ULP erstellen Sie aus den Dateien, die von den Programmen "
+"<i>e-klemmenplan</i> und <i>e-brueckenverwaltung</i> erzeugt wurden, "
+"Listen, die Bestandteil eines Schaltplans sind.<p>"
+
+"Nach dem Start des Programms wählen Sie, ob Sie eine Liste erstellen "
+"oder eine vorher erstellte Liste ab einer bestimmten Seite löschen wollen.<p>"
+
+"<b>Liste erstellen</b><p>"
+
+"Wählen Sie eine Datei, die Sie vorher mit den oben genannten Programmen erzeugt haben "
+"(*.brk oder *.vbd).<p>"
+
+"Im Menü links können Sie selektieren, welche Spalten der Datei nicht ausgegeben werden sollen. "
+"Das Programm errechnet den Maximalwert der Textgröße (in mil), damit die Tabelle auf eine "
+"Schaltplanseite passt. "
+"Sie können den Wert innerhalb bestimmter Grenzen im Menü rechts verändern. "
+"Ein Klick auf <i>Liste erzeugen</i> hängt die Liste an den bisherigen Schaltplan an. "
+"Dabei wird auf den neuen Seiten jeweils der Rahmen von Seite 1 des Schaltplans verwendet. "
+"<b>Voraussetzung: er muss am Koordinatennullpunkt platziert sein</b>.<p>"
+
+"Anpassungen an andere Rahmen können Sie direkt im Programm vornehmen (siehe Kommentare).<p>"
+
+"<b>Achtung! Alle Maße in mil (40 mil ist ca. 1 mm)</b><p>"
+
+"<b>Seiten löschen</b><p>"
+
+"Tragen Sie in das Textfeld die Seitennummer ein, ab der (inklusive) die restlichen Seiten "
+"des Schaltplans gelöscht werden sollen, und klicken Sie auf <i>Seiten löschen</i>. "
+"Bestätigen Sie dann die Fragen des Programms alle mit <i>Ja</i>, bis alle Seiten gelöscht sind.<p>"
+
+"Die Seitennummer muss 2 oder größer sein.<p>"
+;
+
+void ShowHelp(void) {
+  dlgDialog("Hilfe\t\t\t\t\t") {
+     dlgHBoxLayout dlgSpacing(500);
+     dlgHBoxLayout{
+        dlgVBoxLayout dlgSpacing(600);
+        dlgTextView(HelpText);
+        }
+     dlgHBoxLayout {
+        }
+     dlgHBoxLayout {
+        dlgStretch(1);
+        dlgPushButton("+OK") dlgAccept();
+        }
+     };
+}
+
+void SetFileNames(void) { // in Schematic-Kontext aufrufen
+  if (!schematic) {
+     exit(1);
+     }
+  schematic(SCH) {
+    FileName  = filesetext(SCH.name, fext);
+    FileTmp   = filesetext(SCH.name, ".scr");
+    i = 0;
+    SCH.sheets(SH) {
+        i++;
+        }
+    shnr = i + 1;
+    }
+}
+
+void ReadFile(void) {
+  if (FileName != "")
+     NrLines = fileread(lines, FileName);
+}
+
+int GetMaxSize(void) {
+  if (FileName == "") return MaxSize;
+  np = strsplit(head, lines[0], '\t');
+  // Breite der Felder feststellen
+  for (i = 0; i < NrLines; i++) {
+      strsplit(item, lines[i], '\t');
+      linelength = 0; // max # Zeichen
+      for (j = 0; j < np; j++) {
+           maxlen[j] = max(maxlen[j], strlen(item[j]));
+           if (!PrintOff[j]) {
+              linelength += maxlen[j] + fieldmarginchar; // linelength in Zeichen
+              }
+          }
+      }
+  // Höhe zu Breite = 100/85
+  MaxSize = min (180, 11000 * 100 / (linelength * 85)); // max. 180 Mil
+  sprintf(MaxSizeStr, "Zeichengröße/mil (max. %d)\t", MaxSize);
+  return MaxSize;
+}
+
+int GenerateScr(void) {
+  // Header
+  Cmd = ""; ypos = ystart;
+  GetMaxSize();
+  if (size > MaxSize) return 0; // Zeilen zu lang (11050 ist max., aber 50 mil Sicherheit)
+  //Kommandostring erzeugen
+  sprintf(s, "grid mil 100 1;\n");         Cmd += s;
+  sprintf(s, "group (-1 -1) (-1 1) (1 1) (1 -1) (> -1 -1);\ncut (0 0);\n"); Cmd += s;
+  sprintf(s, "display -98;\n");            Cmd += s;
+  sprintf(s, "edit .S%d;\n", shnr);        Cmd += s;
+  sprintf(s, "paste (0 0);\nwindow fit;\n"); Cmd += s;
+  sprintf(s, "change layer %d;\n", layer); Cmd += s;
+  sprintf(s, "change font fixed;\n");      Cmd += s;
+  sprintf(s, "change size %d;\n", size);   Cmd += s;
+  sprintf(s, "change width %d;\n", width_head); Cmd += s;
+  sprintf(s, "wire (%d %d) (%d %d);\n", xstart, ypos, xright, ypos); Cmd += s;
+  for (i = 0; i < NrLines; i++) {
+      if (ypos > lowmargin + linedist) {
+         ypos -= linedist;
+         }
+      else { // neue Seite
+         ypos = ystart;
+         shnr++;
+         sprintf(s, "edit .S%d;\n", shnr); Cmd += s;
+         sprintf(s, "paste (0 0);\nwindow fit;\n");         Cmd += s;
+         sprintf(s, "change width %d;\n", width_head); Cmd += s;
+         sprintf(s, "wire (%d %d) (%d %d);\n", xstart, ypos, xright, ypos); Cmd += s;
+         ypos -= linedist;
+         sprintf (s, "text '%s' R0 (%d %d);\n", headline, xtextpos, ypos + y_margin); Cmd += s;
+         sprintf(s, "wire (%d %d) (%d %d);\n", xstart, ypos, xright, ypos); Cmd += s;
+         ypos -= linedist;
+         sprintf(s, "change width %d;\n", width); Cmd += s;
+         }
+      strsplit(item, lines[i], '\t');
+      t = "";
+      for (j = 0; j < np; j++) {
+          maxlen[j] = max(maxlen[j], strlen(item[j]));
+          if (!PrintOff[j]) {
+             sprintf (s, "%-*s", maxlen[j]+fieldmarginchar, item[j]); t += s; // t ist Textzeile
+             }
+          }
+      sprintf (s, "text '%s' R0 (%d %d);\n", t, xtextpos, ypos + y_margin); Cmd += s;
+      sprintf(s, "wire (%d %d) (%d %d);\n", xstart, ypos, xright, ypos); Cmd += s;
+      if (i == 0) {
+         headline = t;
+         sprintf(s, "change width %d;\n", width); Cmd += s;
+         }
+      }
+  Cmd += "grid last;\n";
+  return 1;
+}
+
+void OutputScr(string Cmd) {
+  output(FileTmp, "wtD") {
+    printf ("%s", Cmd);
+    }
+  exit("script '" + FileTmp + "';\n");
+}
+
+void DelSheets(int page) {
+  CmdDel = "";
+  if (page == 0) return;
+  schematic(SCH) {
+    SCH.sheets(SH) {
+        if (SH.number >= page) {
+           sprintf(s, "remove .S%d;\n", page);
+           CmdDel += s;
+           }
+        }
+    }
+}
+//--------------------------------------------------------------------------------------
+void GetFileName(void) {
+  dlgDialog("Ausgangsdatei wählen") {
+    dlgHBoxLayout dlgSpacing(+450);
+    dlgTextView("Wählen Sie die Ausgangsdatei für die Listenausgabe, "
+                "normalerweise *.vbd oder *.brk, wie von den Programmen "
+                "e-klemmenplan oder e-brueckenverwaltung erzeugt.<p>"
+                "Oder wählen Sie <i>Seiten löschen</i>, wenn Sie "
+                "Seiten Ihres Schaltplans löschen wollen."
+               );
+    dlgHBoxLayout {
+       dlgStretch(1);
+       dlgPushButton("&Seiten löschen")  {FileName = ""; dlgAccept();}
+       dlgPushButton("+&Liste erzeugen") {
+                            FileName = dlgFileOpen("Datei wählen", FileName,
+                            "Klemmenplan (*.vbd);;Brückenplan (*.brk);;Alle Dateien (*)");
+                            if (FileName != "") dlgAccept();
+                            }
+       dlgPushButton("-&Beenden") exit(0);
+       }
+  };
+}
+
+void ShowUserInterface(void) {
+dlgDialog(Version) {
+  dlgHBoxLayout dlgSpacing(100);
+  dlgHBoxLayout {
+     if (FileName != "") {
+        dlgGroup("Nicht drucken") {
+           for (i = 0; i < np; i++) {
+               dlgHBoxLayout {
+                  dlgCheckBox(head[i], PrintOff[i]) if (GetMaxSize() < size) size = MaxSize;
+                  }
+               }
+           dlgSpacing(10);
+           }
+        }
+
+    dlgGroup("") {
+       if (FileName != "")
+          dlgHBoxLayout {
+             dlgLabel(MaxSizeStr, 1);
+             dlgIntEdit(size, 40, 180);
+             }
+       else
+          dlgHBoxLayout {
+             dlgLabel("Löschen ab Seite\t");
+             dlgIntEdit(delpage, 0, 999);
+             }
+       }
+
+    }
+  dlgSpacing(10);
+  dlgHBoxLayout {
+     }
+  dlgHBoxLayout {
+     dlgPushButton("&Hilfe") ShowHelp();
+     dlgStretch(1);
+     if (FileName == "")
+        dlgPushButton("&Seiten Löschen") if (delpage > 1){DelSheets(delpage); OutputScr(CmdDel);}
+                                      else dlgMessageBox("Löschen erst ab Seite 2 möglich!", "OK");
+     else
+        dlgPushButton("&Liste erzeugen") if (GenerateScr()) OutputScr(Cmd);
+                                         else dlgMessageBox("Wert für Textgröße zu hoch!", "OK");
+     dlgPushButton("&Beenden") dlgReject();
+     }
+   };
+}
+
+//--------------------------------------------------------------------------------------
+
+SetFileNames();
+GetFileName();
+ReadFile();
+if (!GenerateScr()) size = MaxSize;
+ShowUserInterface();

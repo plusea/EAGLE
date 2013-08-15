@@ -1,0 +1,752 @@
+#usage  "<qt>This EAGLE User Language Program generates a script file "
+        "maskdata.scr that generates new layers for solder stop mask "
+        "and cream frame. See parameter section in this file.<p>"
+        "<br>"
+        "In these layers each symbol can be edited separately."
+        "<br>"
+        "Known limitation: Octagon shaped pads are covered with a round stop symbol."
+        "<p>"
+        "Das ULP erzeugt ein Script-File maskdata.scr, das vier "
+        "neue Layer fuer die Loetstop- und Lotpastensymbole erzuegt. "
+        "Die Definition kann im Abschnitt parameter veraendert werden. "
+        "<br>"
+        "In diesem Layer kann jedes Symbol einzeln bearbeitet werden."
+        "<br>"
+        "Einschraenkungen: Octagon Pads erhalten eine runde Loetstoppmake!"
+        "</qt>"
+
+/*
+Tue Nov 23 14:21:02 1999
+This ULP generates new layers for solder stop mask and cream frame.
+This allows to edit/delete certain symbols.
+Mit diesem ULP kann man eigene Layer fuer die Loetstoppmaske bzw.
+Lotpastenmaske erzeugen. Diese Symbole koennen einzeln editiert werden.
+Uploaded by Richard Hammerl <ric@cadsoft.de> from CadSoft Computer GmbH
+*/
+
+#require 5.0600
+
+string Version = "1.0.1"; // 2010-05-11 adapted to Eagle Version 5.x alf@cadsoft.de
+                          //            extended to Long- and Offset-PAD,
+                          //            draw also RECTS, CIRCLES, WIRES, POLYGONS in packages on Layer 29,30,31,32
+                          //            and RECTS, CIRCLES, WIRES, POLYGONS in board on Layer 29,30,31,32 to new layer
+                          // 2010-05-18 accept Rountness of SMD  alf@cadsoft.de
+
+
+// ------------------------------------------------------------------
+// ---------- parameter section -------------------------------------
+
+real stopframe  =  0.00;   // Defines the parameter STOPFRAME in mm
+real creamframe =  0.00;   // Defines the parameter CREAMFRAME in mm
+
+int  tstop_new  = 129,    // To define the new mask data layers
+     bstop_new  = 130,    // here you can change the layer numbers
+     tcream_new = 131,    // as you like
+     bcream_new = 132;
+
+
+// ------------------------------------------------------------------
+// ---------- program section ---------------------------------------
+
+
+real Xneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+  real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+  real WinkelNeu;		/* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+  if ((Xalt > Xorigin) && (Yalt >= Yorigin))	{		/* Quadrant 1 */
+      WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt >= Yorigin))	{		/* Quadrant 2 */
+      WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt < Yorigin))	{		/* Quadrant 3 */
+      WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt > Xorigin) && (Yalt < Yorigin))	{		/* Quadrant 4 */
+      WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt == Yorigin))	{		/* Ursprung   */
+      WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt > Yorigin))	{		/* 90°        */
+      WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt < Yorigin))	{		/* 270°       */
+      WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+      real rad = PI / 180 * WinkelNeu;
+      return (RADIUS * cos(rad));
+  }
+}
+
+real Yneu(real Xalt, real Yalt, real Xorigin, real Yorigin, real UserWinkel) {
+  real RADIUS = sqrt(((Xalt - Xorigin) * (Xalt - Xorigin)) + ((Yalt - Yorigin) * (Yalt - Yorigin)));
+  real WinkelNeu;          /* alter Cosinus Winkel = (Xalt - Xorigin) / RADIUS; */
+
+  if ((Xalt > Xorigin) && (Yalt >= Yorigin))	{	/* Quadrant 1 */
+       WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt >= Yorigin))	{	/* Quadrant 2 */
+       WinkelNeu = acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt < Xorigin) && (Yalt < Yorigin))	{	/* Quadrant 3 */
+       WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt > Xorigin) && (Yalt < Yorigin))	{	/* Quadrant 4 */
+       WinkelNeu = 360 - acos((Xalt - Xorigin) / RADIUS) * 57.29578 + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt == Yorigin))	{	/* Ursprung   */
+       WinkelNeu = (Xalt - Xorigin) + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt > Yorigin))	{	/* 90°        */
+       WinkelNeu = (Xalt - Xorigin + 90) + UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+  if ((Xalt == Xorigin) && (Yalt < Yorigin))	{	/* 270°       */
+       WinkelNeu = (Xalt - Xorigin + 270)+ UserWinkel;
+       real rad = PI / 180 * WinkelNeu;
+       return (RADIUS * sin(rad));
+  }
+}
+
+
+board(B) {
+  string scrfile = filesetext(B.name, "~maskdata.scr");
+
+  output(scrfile, "wtD") {
+    printf("grid mm finest;\n");
+    printf("SET WIRE_BEND 2;\n");
+    printf("Layer %d mytstop;\n", tstop_new);
+    printf("Layer %d mybstop;\n", bstop_new);
+    printf("Layer %d mytcream;\n", tcream_new);
+    printf("Layer %d mybcream;\n", bcream_new);
+
+
+    B.elements(E) {
+      E.package.contacts(C) {
+        if (C.pad) {
+          if (C.pad.flags & PAD_FLAG_STOP) {
+            if (C.pad.shape[16] == PAD_SHAPE_ROUND) {
+              printf("Change Layer %d;\n", tstop_new);
+              printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                      u2mm(C.pad.x), u2mm(C.pad.y),
+                      u2mm(C.pad.x), stopframe + u2mm((C.pad.y)+((C.pad.diameter[16])/2))
+                    );
+              printf("Change Layer %d;\n", bstop_new);
+              printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                      u2mm(C.pad.x), u2mm(C.pad.y),
+                      u2mm(C.pad.x), stopframe + u2mm((C.pad.y)+((C.pad.diameter[16])/2))
+                    );
+            }
+
+            if (C.pad.shape[16] == PAD_SHAPE_SQUARE) {
+
+              printf("Change Layer %d;\n", tstop_new);
+              printf("Rect (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm((C.pad.x)-(C.pad.diameter[16]/2)) - stopframe, u2mm((C.pad.y)+(C.pad.diameter[16]/2)) + stopframe,
+                       u2mm((C.pad.x)+(C.pad.diameter[16]/2)) + stopframe, u2mm((C.pad.y)-(C.pad.diameter[16]/2)) - stopframe
+                    );
+
+              printf("Change Layer %d;\n", bstop_new);
+              printf("Rect (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm((C.pad.x)-(C.pad.diameter[16]/2)) - stopframe, u2mm((C.pad.y)+(C.pad.diameter[16]/2)) + stopframe,
+                       u2mm((C.pad.x)+(C.pad.diameter[16]/2)) + stopframe, u2mm((C.pad.y)-(C.pad.diameter[16]/2)) - stopframe
+                    );
+            }
+
+            if (C.pad.shape[16] == PAD_SHAPE_OCTAGON) {  //the same way like ROUND!!
+
+              printf("Change Layer %d;\n", tstop_new);
+              printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm(C.pad.x), u2mm(C.pad.y),
+                       u2mm(C.pad.x), stopframe + u2mm((C.pad.y)+((C.pad.diameter[16])/2))
+                    );
+
+              printf("Change Layer %d;\n", bstop_new);
+              printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                      u2mm(C.pad.x), u2mm(C.pad.y),
+                      u2mm(C.pad.x), stopframe + u2mm((C.pad.y)+((C.pad.diameter[16])/2))
+              );
+            }
+
+            if (C.pad.shape[16] == PAD_SHAPE_LONG) {
+              printf("Change Layer %d;\n", tstop_new);
+              printf("Wire %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm(C.pad.diameter[16]) + (2 * stopframe),    //Wirewidth+Uebermass
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x+C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x+C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle)
+                    );
+              printf("Change Layer %d;\n", bstop_new);
+              printf("Wire %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm(C.pad.diameter[16]) + (2 * stopframe),    //Wirewidth+Uebermass
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x+C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x+C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]/2), u2mm(C.pad.y), C.pad.angle)
+                    );
+            }
+
+            // Bei den laenglichen Pads ist der groessere der beiden Durchmesser als Parameter anzugeben.
+            // Das Seitenverhaeltnis ist fest auf 2:1 eingestellt.
+
+            if (C.pad.shape[16] == PAD_SHAPE_OFFSET) {
+              printf("Change Layer %d;\n", tstop_new);
+              printf("Wire %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm(C.pad.diameter[16]) + (2 * stopframe),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]*1), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]*1), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x), u2mm(C.pad.y), C.pad.angle)
+                    );
+              printf("Change Layer %d;\n", bstop_new);
+              printf("Wire %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                       u2mm(C.pad.diameter[16]) + (2 * stopframe),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]*1), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x-C.pad.diameter[16]*1), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.x) + Xneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x), u2mm(C.pad.y), C.pad.angle),
+                       u2mm(C.pad.y) + Yneu(u2mm(C.pad.x), u2mm(C.pad.y), u2mm(C.pad.x), u2mm(C.pad.y), C.pad.angle)
+                    );
+            }
+          }
+        }
+        else if (C.smd) {
+          if (C.smd.flags & SMD_FLAG_STOP) {
+            if (C.smd.layer == 1) {  //solder stop and cream frame for top smds
+              printf("Change Layer %d;\n", tstop_new);
+            }
+            else if (C.smd.layer == 16) {  //solder stop and cream frame for bottom smds
+              printf("Change Layer %d;\n", bstop_new);
+            }
+            if (C.smd.roundness) {  // 2010-05-12 alf@cadsoft.de
+              if (C.smd.roundness == 100) {
+                if (C.smd.dx == C.smd.dy) {
+                  printf("CIRCLE 0.0 (%.4f %.4f) (%.4f %.4f);\n",
+                          u2mm(C.smd.x), u2mm(C.smd.y),
+                          u2mm((C.smd.x)+(C.smd.dx/2)) + stopframe, u2mm(C.smd.y)
+                        );
+                }
+                else {
+                  if (C.smd.dx > C.smd.dy) {
+                    printf("WIRE %.4f (%.4f %.4f)  (%.4f %.4f);\n",
+                            u2mm(C.smd.dy) + 2 * stopframe,
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-(C.smd.dx/2-C.smd.dy/2))-stopframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-(C.smd.dx/2-C.smd.dy/2))-stopframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+(C.smd.dx/2-C.smd.dy/2))+stopframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+(C.smd.dx/2-C.smd.dy/2))+stopframe/4, u2mm(C.smd.y), C.smd.angle)
+                          );
+                  }
+                  else {
+                    printf("WIRE %.4f (%.4f %.4f)  (%.4f %.4f);\n",
+                            u2mm(C.smd.dx) + 2 * stopframe,
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y-(C.smd.dy/2-C.smd.dx/2))-stopframe/4, C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y-(C.smd.dy/2-C.smd.dx/2))-stopframe/4, C.smd.angle),
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y+(C.smd.dy/2-C.smd.dx/2))+stopframe/4, C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y+(C.smd.dy/2-C.smd.dx/2))+stopframe/4, C.smd.angle)
+                          );
+                  }
+                }
+              }
+              else {
+                real pw = u2mm(C.smd.dx) / 100 * C.smd.roundness;   // 2010-05-18 alf@cadsoft.de
+                if (C.smd.dy < C.smd.dx) pw = u2mm(C.smd.dy) / 100 * C.smd.roundness / 1.0;
+                printf("POLyGON %.4f (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\n",
+                          pw,
+                          // 1. 90°
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle),
+                          // 1 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle),
+                          // 2 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+stopframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+stopframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+stopframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+stopframe, C.smd.angle),
+                          // 3 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+stopframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+stopframe, C.smd.angle),
+                          // 4 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-stopframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-stopframe, C.smd.angle)
+                      );
+              }
+            }
+            else {
+              printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                      C.smd.angle,
+                      u2mm((C.smd.x)-(C.smd.dx/2)) - stopframe, u2mm((C.smd.y)+(C.smd.dy/2)) + stopframe,
+                      u2mm((C.smd.x)+(C.smd.dx/2)) + stopframe, u2mm((C.smd.y)-(C.smd.dy/2)) - stopframe
+                    );
+            }
+          }
+          if (C.smd.flags & SMD_FLAG_CREAM) {
+            if (C.smd.layer == 1) {  //solder stop and cream frame for top smds
+              printf("Change Layer %d;\n", tcream_new);
+            }
+            if (C.smd.layer == 16) {  //solder stop and cream frame for top smds
+              printf("Change Layer %d;\n", bcream_new);
+            }
+            if (C.smd.roundness) {  // 2010-05-12 alf@cadsoft.de
+              if (C.smd.roundness == 100) {
+                if (C.smd.dx == C.smd.dy) {
+                  printf("CIRCLE 0.0 (%.4f %.4f) (%.4f %.4f);\n",
+                          u2mm(C.smd.x), u2mm(C.smd.y),
+                          u2mm((C.smd.x)+(C.smd.dx/2)) + creamframe, u2mm(C.smd.y)
+                        );
+                }
+                else {
+                  if (C.smd.dy < C.smd.dx) {
+                    printf("WIRE %.4f (%.4f %.4f)  (%.4f %.4f);\n",
+                            u2mm(C.smd.dy) + 2 * creamframe,
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-(C.smd.dx/2-C.smd.dy/2))-creamframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-(C.smd.dx/2-C.smd.dy/2))-creamframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+(C.smd.dx/2-C.smd.dy/2))+creamframe/4, u2mm(C.smd.y), C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+(C.smd.dx/2-C.smd.dy/2))+creamframe/4, u2mm(C.smd.y), C.smd.angle)
+                          );
+                  }
+                  else {
+                    printf("WIRE %.4f (%.4f %.4f)  (%.4f %.4f);\n",
+                            u2mm(C.smd.dx) + 2 * creamframe,
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y-(C.smd.dy/2-C.smd.dx/2))-creamframe/4, C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y-(C.smd.dy/2-C.smd.dx/2))-creamframe/4, C.smd.angle),
+                            u2mm(C.smd.x) + Xneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y+(C.smd.dy/2-C.smd.dx/2))+creamframe/4, C.smd.angle),
+                            u2mm(C.smd.y) + Yneu(u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x), u2mm(C.smd.y+(C.smd.dy/2-C.smd.dx/2))+creamframe/4, C.smd.angle)
+                          );
+                  }
+                }
+              }
+              else {
+                real pw = u2mm(C.smd.dx) / 100 * C.smd.roundness;  // 2010-05-18 alf@cadsoft.de
+                if (C.smd.dy < C.smd.dx) pw = u2mm(C.smd.dy) / 100 * C.smd.roundness / 1.0;
+                printf("POLyGON %.4f (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f);\n",
+                          pw,
+                          // 1. 90°
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle),
+                          // 1 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle),
+                          // 2 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+creamframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+creamframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x+C.smd.dx/2)-pw/2+creamframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+creamframe, C.smd.angle),
+                          // 3 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+creamframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y+C.smd.dy/2)-pw/2+creamframe, C.smd.angle),
+                          // 4 gerade
+                          u2mm(C.smd.x) + Xneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle),
+                          u2mm(C.smd.y) + Yneu( u2mm(C.smd.x), u2mm(C.smd.y), u2mm(C.smd.x-C.smd.dx/2)+pw/2-creamframe, u2mm(C.smd.y-C.smd.dy/2)+pw/2-creamframe, C.smd.angle)
+                      );
+              }
+            }
+            else {
+              printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                        C.smd.angle,
+                        u2mm((C.smd.x)-(C.smd.dx/2)) - creamframe, u2mm((C.smd.y)+(C.smd.dy/2)) + creamframe,
+                        u2mm((C.smd.x)+(C.smd.dx/2)) + creamframe, u2mm((C.smd.y)-(C.smd.dy/2)) - creamframe
+                      );
+
+            }
+          }
+        }
+      }
+
+      E.package.holes(H) {
+        printf("Change Layer %d;\n", tstop_new);
+        printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(H.x), u2mm(H.y),
+                u2mm(H.x), u2mm((H.y)+((H.drill)/2)) + stopframe
+              );
+        printf("Change Layer %d;\n", bstop_new);
+        printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(H.x), u2mm(H.y),
+                u2mm(H.x), u2mm((H.y)+((H.drill)/2)) + stopframe
+              );
+      }
+
+      E.package.rectangles(R) {
+        if (R.layer == 29) {
+          printf("Change Layer %d;\n", tstop_new);
+          printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                  R.angle,
+                  u2mm(R.x1), u2mm(R.y1),
+                  u2mm(R.x2), u2mm(R.y2)
+                );
+        }
+        else if (R.layer == 30) {
+          printf("Change Layer %d;\n", bstop_new);
+          printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                  R.angle,
+                  u2mm(R.x1), u2mm(R.y1),
+                  u2mm(R.x2), u2mm(R.y2)
+                );
+        }
+        else if (R.layer == 31) {
+          printf("Change Layer %d;\n", tcream_new);
+          printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                  R.angle,
+                  u2mm(R.x1), u2mm(R.y1),
+                  u2mm(R.x2), u2mm(R.y2)
+                );
+        }
+        else if (R.layer == 32) {
+          printf("Change Layer %d;\n", bcream_new);
+          printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                  R.angle,
+                  u2mm(R.x1), u2mm(R.y1),
+                  u2mm(R.x2), u2mm(R.y2)
+                );
+        }
+      }
+      E.package.polygons(P) {
+        if (P.layer == 29) {
+          printf("Change Layer %d;\n", tstop_new);
+          int first = 1;
+          P.wires(W) {
+            if (first) {
+              printf("POLYGON %.1f (%.4f %.4f) %+.4f (%.4f %.4f) \n",
+                       u2mm(W.width),
+                       u2mm(W.x1), u2mm(W.y1),
+                       W.curve,
+                       u2mm(W.x2), u2mm(W.y2)
+                    );
+               first = 0;
+            }
+            else {
+              printf(" %+.4f (%.4f %.4f) \n",
+                      W.curve,
+                      u2mm(W.x2), u2mm(W.y2)
+                    );
+            }
+          }
+          printf(";\n");
+        }
+        if (P.layer == 30) {
+          printf("Change Layer %d;\n", bstop_new);
+          int first = 1;
+          P.wires(W) {
+            if (first) {
+              printf("POLYGON %.1f (%.4f %.4f) %+.4f (%.4f %.4f) \n",
+                       u2mm(W.width),
+                       u2mm(W.x1), u2mm(W.y1),
+                       W.curve,
+                       u2mm(W.x2), u2mm(W.y2)
+                    );
+               first = 0;
+            }
+            else {
+              printf(" %+.4f (%.4f %.4f) \n",
+                      W.curve,
+                      u2mm(W.x2), u2mm(W.y2)
+                    );
+            }
+          }
+          printf(";\n");
+        }
+        if (P.layer == 31) {
+          printf("Change Layer %d;\n", tcream_new);
+          int first = 1;
+          P.wires(W) {
+            if (first) {
+              printf("POLYGON %.1f (%.4f %.4f) %+.4f (%.4f %.4f) \n",
+                       u2mm(W.width),
+                       u2mm(W.x1), u2mm(W.y1),
+                       W.curve,
+                       u2mm(W.x2), u2mm(W.y2)
+                    );
+               first = 0;
+            }
+            else {
+              printf(" %+.4f (%.4f %.4f) \n",
+                      W.curve,
+                      u2mm(W.x2), u2mm(W.y2)
+                    );
+            }
+          }
+          printf(";\n");
+        }
+        if (P.layer == 32) {
+          printf("Change Layer %d;\n", bcream_new);
+          int first = 1;
+          P.wires(W) {
+            if (first) {
+              printf("POLYGON %.1f (%.4f %.4f) %+.4f (%.4f %.4f) \n",
+                       u2mm(W.width),
+                       u2mm(W.x1), u2mm(W.y1),
+                       W.curve,
+                       u2mm(W.x2), u2mm(W.y2)
+                    );
+               first = 0;
+            }
+            else {
+              printf(" %+.4f (%.4f %.4f) \n",
+                      W.curve,
+                      u2mm(W.x2), u2mm(W.y2)
+                    );
+            }
+          }
+          printf(";\n");
+        }
+      }
+
+      E.package.circles(C) {
+        if (C.layer == 29) {
+          printf("Change Layer %d;\n", tstop_new);
+          printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(C.width),
+                  u2mm(C.x), u2mm(C.y),
+                  u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+                );
+        }
+        else if (C.layer == 30) {
+          printf("Change Layer %d;\n", bstop_new);
+          printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(C.width),
+                  u2mm(C.x), u2mm(C.y),
+                  u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+                );
+        }
+        else if (C.layer == 31) {
+          printf("Change Layer %d;\n", tcream_new);
+          printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(C.width),
+                  u2mm(C.x), u2mm(C.y),
+                  u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+                );
+        }
+        else if (C.layer == 32) {
+          printf("Change Layer %d;\n", bcream_new);
+          printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(C.width),
+                  u2mm(C.x), u2mm(C.y),
+                  u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+                );
+        }
+      }
+      E.package.wires(W) {
+        if (W.layer == 29) {
+          printf("Change Layer %d;\n", tstop_new);
+          printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                  u2mm(W.width),
+                  u2mm(W.x1), u2mm(W.y1),
+                  W.curve,
+                  u2mm(W.x2), u2mm(W.y2)
+                );
+        }
+        else if (W.layer == 30) {
+          printf("Change Layer %d;\n", bstop_new);
+          printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                  u2mm(W.width),
+                  u2mm(W.x1), u2mm(W.y1),
+                  W.curve,
+                  u2mm(W.x2), u2mm(W.y2)
+                );
+        }
+        else if (W.layer == 31) {
+          printf("Change Layer %d;\n", tcream_new);
+          printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                  u2mm(W.width),
+                  u2mm(W.x1), u2mm(W.y1),
+                  W.curve,
+                  u2mm(W.x2), u2mm(W.y2)
+                );
+        }
+        else if (W.layer == 32) {
+          printf("Change Layer %d;\n", bcream_new);
+          printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                  u2mm(W.width),
+                  u2mm(W.x1), u2mm(W.y1),
+                  W.curve,
+                  u2mm(W.x2), u2mm(W.y2)
+                );
+        }
+      }
+    }
+
+    B.holes(HO) {
+      printf("Change Layer %d;\n", tstop_new);
+      printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+              u2mm(HO.x), u2mm(HO.y),
+              u2mm(HO.x), u2mm((HO.y)+((HO.drill)/2)) + stopframe
+            );
+
+      printf("Change Layer %d;\n", bstop_new);
+      printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+               u2mm(HO.x), u2mm(HO.y),
+               u2mm(HO.x), u2mm((HO.y)+((HO.drill)/2)) + stopframe
+            );
+    }
+
+    B.signals(S) {
+      S.vias(V) {
+        if (V.shape[16] == VIA_SHAPE_ROUND) {
+          printf("Change Layer %d;\n", tstop_new);
+          printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(V.x), u2mm(V.y),
+                  u2mm(V.x), stopframe + u2mm((V.y)+((V.diameter[16])/2))
+                );
+          printf("Change Layer %d;\n", bstop_new);
+          printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(V.x), u2mm(V.y),
+                  u2mm(V.x), stopframe + u2mm((V.y)+((V.diameter[16])/2))
+                );
+        }
+
+        if (V.shape[16] == VIA_SHAPE_OCTAGON) { //the same way as ROUND
+          printf("Change Layer %d;\n", tstop_new);
+          printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(V.x), u2mm(V.y),
+                  u2mm(V.x), stopframe + u2mm((V.y)+((V.diameter[16])/2))
+                );
+          printf("Change Layer %d;\n", bstop_new);
+          printf("Circle 0 (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm(V.x), u2mm(V.y),
+                  u2mm(V.x), stopframe + u2mm((V.y)+((V.diameter[16])/2))
+                );
+        }
+
+        if (V.shape[16] == VIA_SHAPE_SQUARE) {
+          printf("Change Layer %d;\n", tstop_new);
+          printf("Rect (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm((V.x)-(V.diameter[16]/2)) - stopframe, u2mm((V.y)+(V.diameter[16]/2)) + stopframe,
+                  u2mm((V.x)+(V.diameter[16]/2)) + stopframe, u2mm((V.y)-(V.diameter[16]/2)) - stopframe
+                );
+          printf("Change Layer %d;\n", bstop_new);
+          printf("Rect (%.4f %.4f) (%.4f %.4f);\n",
+                  u2mm((V.x)-(V.diameter[16]/2)) - stopframe, u2mm((V.y)+(V.diameter[16]/2)) + stopframe,
+                  u2mm((V.x)+(V.diameter[16]/2)) + stopframe, u2mm((V.y)-(V.diameter[16]/2)) - stopframe
+                );
+        }
+      }
+    }
+    B.rectangles(R) {
+      if (R.layer == 29) {
+        printf("Change Layer %d;\n", tstop_new);
+        printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                R.angle,
+                u2mm(R.x1), u2mm(R.y1),
+                u2mm(R.x2), u2mm(R.y2)
+              );
+      }
+      else if (R.layer == 30) {
+        printf("Change Layer %d;\n", bstop_new);
+        printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                R.angle,
+                u2mm(R.x1), u2mm(R.y1),
+                u2mm(R.x2), u2mm(R.y2)
+              );
+      }
+      else if (R.layer == 31) {
+        printf("Change Layer %d;\n", tcream_new);
+        printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                R.angle,
+                u2mm(R.x1), u2mm(R.y1),
+                u2mm(R.x2), u2mm(R.y2)
+              );
+      }
+      else if (R.layer == 32) {
+        printf("Change Layer %d;\n", bcream_new);
+        printf("Rect R%.1f (%.4f %.4f) (%.4f %.4f);\n",
+                R.angle,
+                u2mm(R.x1), u2mm(R.y1),
+                u2mm(R.x2), u2mm(R.y2)
+              );
+      }
+    }
+    B.circles(C) {
+      if (C.layer == 29) {
+        printf("Change Layer %d;\n", tstop_new);
+        printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(C.width),
+                u2mm(C.x), u2mm(C.y),
+                u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+              );
+      }
+      else if (C.layer == 30) {
+        printf("Change Layer %d;\n", bstop_new);
+        printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(C.width),
+                u2mm(C.x), u2mm(C.y),
+                u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+              );
+      }
+      else if (C.layer == 31) {
+        printf("Change Layer %d;\n", tcream_new);
+        printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(C.width),
+                u2mm(C.x), u2mm(C.y),
+                u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+              );
+      }
+      else if (C.layer == 32) {
+        printf("Change Layer %d;\n", bcream_new);
+        printf("CIRCLE %.4f (%.4f %.4f) (%.4f %.4f);\n",
+                u2mm(C.width),
+                u2mm(C.x), u2mm(C.y),
+                u2mm(C.x) + u2mm(C.radius), u2mm(C.y)
+              );
+      }
+    }
+    B.wires(W) {
+      if (W.layer == 29) {
+        printf("Change Layer %d;\n", tstop_new);
+        printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                u2mm(W.width),
+                u2mm(W.x1), u2mm(W.y1),
+                W.curve,
+                u2mm(W.x2), u2mm(W.y2)
+              );
+      }
+      else if (W.layer == 30) {
+        printf("Change Layer %d;\n", bstop_new);
+        printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                u2mm(W.width),
+                u2mm(W.x1), u2mm(W.y1),
+                W.curve,
+                u2mm(W.x2), u2mm(W.y2)
+              );
+      }
+      else if (W.layer == 31) {
+        printf("Change Layer %d;\n", tcream_new);
+        printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                u2mm(W.width),
+                u2mm(W.x1), u2mm(W.y1),
+                W.curve,
+                u2mm(W.x2), u2mm(W.y2)
+              );
+      }
+      else if (W.layer == 32) {
+        printf("Change Layer %d;\n", bcream_new);
+        printf("WIRE %.4f (%.4f %.4f) %+.4f (%.4f %.4f);\n",
+                u2mm(W.width),
+                u2mm(W.x1), u2mm(W.y1),
+                W.curve,
+                u2mm(W.x2), u2mm(W.y2)
+              );
+      }
+    }
+    printf("grid last;");
+  }
+  exit("SCRIPT '" + scrfile + "'");
+}

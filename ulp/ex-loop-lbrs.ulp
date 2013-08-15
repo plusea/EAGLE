@@ -1,0 +1,67 @@
+#usage "<b>Example: Check all libraries in a directory</b>\n"
+       "<p>"
+       "This is an example how to loop through all libraries in a directory "
+       "and perform a device check."
+       "<p>"
+       "In this case, the device descriptions are checked for double bold tags. "
+       "An error report error.txt is generated in the library directory."
+       "<p>"
+       "Load any library from the library directory and execute the ULP."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string a[], par, lbr_path, dest, cmd = "", s, progname;
+int    lbrpnt, x;
+
+//--------------------------------------------------
+string checklbr (UL_LIBRARY L) {
+  int errflag = 0;
+  string h;
+  L.devices(D) {
+    h = "";
+    sprintf(h,"%s",D.description);
+    h = strlwr(h);
+    if (strstr(h, "<b><b>") >= 0 && !errflag) {
+       cmd += L.name+"\n";
+       errflag = 1;
+       }
+    }
+  if (errflag) return "***";
+  else return "";
+  }
+
+
+//-------- main program --------------------------------------------------
+progname = filesetext(filename(argv[0]), "");
+library(L) {
+  lbr_path = filedir(L.name);
+  }
+dest = lbr_path+"error.txt";
+
+lbrpnt = strtod(argv[1]);
+int n = fileglob(a, lbr_path+"*.lbr");
+
+if (n) {
+   if (lbrpnt < 1) { // first run
+// initial actions, e.g. headline
+//------------------------------------------------------------------------
+      output(dest, "wt") printf("Faulty Libraries marked with ***\n\n");
+//------------------------------------------------------------------------
+      exit("OPEN '"+lbr_path+filename(a[0])+"';\nRUN '"+progname+"' 1");
+      }
+   else {          // next runs
+      library(L) {
+// insert here whatever you want to do with the current library
+//------------------------------------------------------------------------
+        s = checklbr(L);
+        output(dest, "at") printf("%s%s\n",L.name, s);
+//------------------------------------------------------------------------
+        lbrpnt++;
+        sprintf(par, "%d", lbrpnt);
+        if (lbrpnt == n) exit(0);
+        exit("OPEN '"+lbr_path+filename(a[lbrpnt])+"';\nRUN '"+progname+"' "+par+"\n");
+        }
+      }
+  }

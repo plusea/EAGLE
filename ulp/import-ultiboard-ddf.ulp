@@ -1,0 +1,1502 @@
+#usage "<b>Import ULTIBOARD PCB Design Data File format (DDF)</b>\n"
+       "<p>"
+       "Imports ULTIBOARD PCB Design Data File format (DDF) Version 4.80 & 5.50."
+       "<p>"
+       "Based on : Ultiboard User Manual, Appendix A, FILE FORMATS."
+       "<p>"
+       "ULTIBOARD is a registered trademark of Electronics Workbench."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string InfoUS =
+       "<qt>Confirm the message:<p>\n" +
+       "<b>connect Signals</b><p>\n" +
+       " S$nn <p>\n" +
+       " S$nn<p>\n" +
+       " with <b>OK</b>.<p>" +
+       "<hr>" +
+       "This message will be prompted if a net segment (track) is connected to another " +
+       "net segment. " +
+       "The reason for this is the way ULTIBOARD exports the tracks, first the " +
+       "horizontal ones, then the vertical ones and at least tracks that run diagonal." +
+       "If ULTIBOARD has not named a segment of a track, EAGLE generates a name of" +
+       "its own and uses the <b>$</b> sign at second position in it." +
+       "Please notice that the text height (and length) differs in EAGLE and " +
+       "ULTIBOARD. The position of the text will be calculated dependent on " +
+       "the the height and length of each character of the EAGLE vector font.<p>" +
+       " - ULTIBOARD uses the text center as origin point<p>" +
+       " - EAGLE uses the left lower corner of the text as origin point.<p>" +
+       "The DDF format does not provide information about the lenght of characters.<p>";
+
+string ULTIBoardinfo =
+          "<b>ULTIBOARD Version 4, Revision 80</b><p>" +
+          " The x_coord and y_coord are expressed in database units (1/1200th of an inch)<p>" +
+          " The rotation is given in degrees, specified as a floating point number between 0.0 and 360.0 degrees.<p>" +
+          " Internally, Ultiboard works with a precision of 1/64th degree<p>" +
+          "<hr> " +
+          "<b>ULTIBOARD Version 5, Revision 50</b><p>" +
+          " The x_coord and y_coord are expressed in database units (1 nanometer)<p>" +
+          " The rotation is given in degrees, specified as a floating point number between 0.0 and 360.0 degrees.<p>" +
+          " Internally, Ultiboard works with a precision of 1/64th degree<p>" +
+          "<hr> " +
+          "ULTIBOARD is a registered trademark of Electronics Workbench";
+
+string InfoDE =
+       "<qt>Best&auml;tigen sie die Meldung:<p>\n" +
+       "<b>connect Signals</b><p>\n" +
+       " S$nn <p>\n" +
+       " S$nn<p>\n" +
+       " mit <b>OK</b>.<p>" +
+       "Diese Meldung wird dadurch erzeugt, da&szlig; ein Netzsegment (Leiterzug) mit " +
+       "einem anderen Netzsegment verbunden wird. " +
+       "Die Ursache ist die Reihenfolge der Ausgabe der Leiterbahn-Segmente aus ULTIBOARD, " +
+       "da ULTIBOARD zuerst waagrechte dann senkrechte und am Schlu&szlig; diagonale " +
+       "Leiterbahnsegmente ausgibt.<p>" +
+       "Wird von ULTIBOARD diesen Leitersegmenten kein Netzname zugewiesen, " +
+       "so erzeugt EAGLE einen Namen mit dem Zeichen <b>$</b> an zweiter Position.<p>" +
+       "<hr> "  +
+       "Beachten Sie, da&szlig; die Buchstabengr&ouml;&szlig;en (Zeichenl&auml;nge) " +
+       "von ULTIBOARD und EAGLE nicht identisch sind. Die Position der Texte wird " +
+       "berechnet durch die Texth&ouml;he und dem Wert der Zeichenl&auml;nge jedes " +
+       "Buchstaben des EAGLE-Vector-Font.<p>\n" +
+       " - ULTIBOARD plaziert Texte am Mittelpunkt des Textes.<p>" +
+       " - EAGLE plaziert Texte mit der linken unteren Ecke des 1. Buchstaben.<p>" +
+       "Das ULP berechnet die Position anhand der Stringl&auml;nge und Texth&ouml;he. " +
+       "Im DDF-Format gibt es keine Information bez&uuml;glich der Buchstabenl&auml;nge, " +
+       "dadurch kann es vorkommen, da&szlig; l&auml;ngere Texte nicht exakt an der gleichen " +
+       "Position wie im ULTIBOARD Layout positioniert werden.<p>"  +
+       "<hr> "  +
+       "Die <b>Warnung</b>: No forward-/backannotation will be performed!<p>" +
+       "wird erzeugt, falls ein Schaltplan zur Laufzeit des ULP geladen ist, und mu&szlig; " +
+       "mit <b>OK</b> best&auml;tigt werden.<p>";
+
+string Version = "1.1.0";
+string costomer;
+string versionnumb;
+string revisionnum;
+string tmpchtxtfile = ".ch$";
+string tmpextfile = "$.scr";
+string changetextfile;
+string scriptfile;
+string ULTIversion[] = { "480", "550" };
+real   ULTIscale[]   = {  1.20,  25400.0 };
+real   rotatemult[]  = {  64  ,  64 };
+int VersionCnt = 2;
+real xScale;
+real rotatemultiple;
+string Grid = "MIL";
+real CharacterLength;
+real eagle_caracter_length[] = {
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.000, 00.000, 00.000, 00.000,
+     00.917, 00.303, 00.764, 00.917,
+     00.917, 01.071, 00.917, 00.610,
+     00.764, 00.764, 00.917, 00.917,
+     00.764, 00.917, 00.764, 00.917,
+     00.917, 00.764, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.764, 00.764,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.764, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.764,
+     00.917, 00.764, 00.917, 00.917,
+     00.610, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.764, 00.917,
+     00.917, 00.764, 00.917, 00.917,
+     00.764, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.764, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.457, 00.917, 00.917, 00.917,
+     01.390, 01.236, 01.390, 00.150,
+     -6.000, 00.000, 00.307, 00.618,
+     00.618, 00.307, 00.925, 00.618,
+     00.610, 00.307, 00.307, 00.917,
+     00.618, 00.618, 00.618, 00.917,
+     00.917, 00.917, 00.618, 00.925,
+     00.925, 00.618, 00.925, 00.925,
+     00.917, 00.618, 00.610, 01.071,
+     00.000, 00.303, 00.917, 01.224,
+     00.618, 00.610, 00.307, 00.764,
+     00.457, 00.610, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.764,
+     00.764, 00.917, 00.610, 00.917,
+     00.917, 00.917, 00.764, 00.457,
+     00.764, 00.917, 00.917, 00.917,
+     01.071, 01.071, 00.917, 00.917,
+     00.917, 00.610, 00.917, 00.618,
+     00.917, 00.917, 01.531, 00.917,
+     00.307, 00.917, 00.618, 00.618,
+     00.618, 00.618, 00.925, 00.618,
+     00.618, 00.917, 01.071, 01.071,
+     00.764, 01.071, 00.917, 01.224,
+     01.071, 00.764, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.764,
+     00.917, 00.917, 00.917, 00.307,
+     00.917, 00.917, 01.378, 00.917,
+     00.917, 00.917, 00.917, 00.917,
+     00.764, 00.610, 00.764, 00.764,
+     00.618, 00.917, 00.917, 00.917,
+     00.917, 00.917, 00.917, 00.764,
+     00.917, 00.917, 00.917, 00.917,
+     00.917, 01.224, 01.071, 00.917
+     };
+real   def_grid;
+real   refpointx;
+real   refpointy;
+string ulp_path = "";
+int    lastLayer = 0;
+string filter;
+string ddffile;
+int    Result = 0;
+string st     = "";
+char lf    = 10;
+char cr    = 13;
+char nl    = 12;
+char polysepar = ':';
+char semikolon = ';';
+string cmd  = "";
+string brd  = "";
+string cmdroute = "";
+string script = "";
+string polygon = "";
+string arcscript = "";
+string cmdchname = "";
+string cmdvalue = "";
+real   TextRatio = 8;
+char c[];
+int  nBytes = 0;
+int  n = 0;
+string fileName = "";
+string shapename = "";
+string refLayer[] = { "49",
+                      "1",
+                      "16",
+                      "2",
+                      "3",
+                      "4",
+                      "5",
+                      "6",
+                      "7",
+                      "8",
+                      "9",
+                      "10",
+                      "11",
+                      "12",
+                      "13",
+                      "14",
+                      "15",
+                      "116",
+                      "117",
+                      "118",
+                      "119",
+                      "120",
+                      "121",
+                      "122",
+                      "123",
+                      "124",
+                      "125",
+                      "126",
+                      "127",
+                      "128",
+                      "129",
+                      "130",
+                      "131"
+                      };
+string TMrefLayer[] = { "",
+                        "",
+                        "M",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                        };
+real boardoutline[];
+string layerDirection[];
+real tracewidth[];
+real traceclearance[];
+real drilltolerance;
+real drilltolerancevalue;
+int  drillcode[];
+real pad0innerX1[];
+real pad0innerX2[];
+real pad0innerY[];
+real pad0innerRadius[];
+real pad0innerClear[];
+real pad0innerHorizont[];
+real pad0innerVertical[];
+real pad0innerThermH[];
+real pad0innerThermV[];
+real pad1topX1[];
+real pad1topX2[];
+real pad1topY[];
+real pad1topRadius[];
+real pad1topClear[];
+real pad1topHorizont[];
+real pad1topVertical[];
+real pad1topThermH[];
+real pad1topThermV[];
+real pad2bottomX1[];
+real pad2bottomX2[];
+real pad2bottomY[];
+real pad2bottomRadius[];
+real pad2bottomClear[];
+real pad2bottomHorizont[];
+real pad2bottomVertical[];
+real pad2bottomThermH[];
+real pad2bottomThermV[];
+int net = -1;
+string netname[];
+int  nettracecode[];
+real netxlo[];
+real netxhi[];
+real netylo[];
+real netyhi[];
+real netxsum[];
+real netysum[];
+int  netpincount[];
+netname[65535] = "";
+int    cntrefPin = 0;
+string refPinNr[];
+string refPackname[];
+int    pointPackPin[];
+int    cntShape = 0;
+string signal[];
+string brdvia;
+int comp = 0;
+real stringLength(string s, real hight) {
+   real len = 0;
+   for (int l = 0; l < strlen(s); l++) {
+      len += (eagle_caracter_length[s[l]] * hight);
+      }
+   return len;
+   }
+void importpass2(void) {
+   string changetextfile = argv[2];
+   string scriptfile = filesetext(changetextfile, "$" + tmpextfile);
+   string s[];
+   int nString = fileread(s, changetextfile);
+   if (board) board(B) {
+      output(scriptfile, "wt") {
+         printf("DISPLAY NONE 25;\n");
+         printf("GRID %s FINEST;\n", Grid);
+         B.elements(E) {
+            for (int n = 0; n < nString; n+= 7) {
+               if (E.name == s[n]) {
+                  E.texts(T) {
+                     if (T.layer == 25 && T.value == s[n]) {
+                       real size   = strtod(s[n+5]);
+                       if (size != 0) {
+                          printf("# %s\n", s[n]);
+                          real r = T.angle;
+                          int pacnametextrotate  = abs(r);
+                          real slen   = strtod(s[n+1]);
+                          int trotate = strtod(s[n+2]);
+                          real relx   = strtod(s[n+3]);
+                          real rely   = strtod(s[n+4]);
+                          real ratio  = strtod(s[n+6]);
+                          if(ratio <= 1) ratio = 1;
+                          printf("CHANGE SIZE %.2f (%.2f %.2f);\n", size, u2mil(T.x), u2mil(T.y) );
+                          printf("CHANGE RATIO %.0f (%.2f %.2f);\n", ratio, u2mil(T.x), u2mil(T.y) );
+                          int pacrotate = E.angle;
+                          if (pacrotate == pacnametextrotate) {
+                             switch (pacrotate) {
+                                case   0 :
+                                   switch(trotate) {
+                                      case   0 :
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) - slen,
+                                              u2mil(E.y) + (rely) - (size/2) );
+                                           break;
+                                      case  90 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) + (size/2),
+                                              u2mil(E.y) + (rely) - slen );
+                                           break;
+                                      case 180 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) + slen,
+                                              u2mil(E.y) + (rely) + (size/2));
+                                           break;
+                                      case 270 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) + (size/2),
+                                              u2mil(E.y) + (rely) - slen );
+                                           break;
+                                      }
+                                   break;
+                                case  90 :
+                                   switch(trotate) {
+                                      case   0 :
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (rely) + (size/2),
+                                              u2mil(E.y) + relx - slen);
+                                           break;
+                                      case  90 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (rely) - slen,
+                                              u2mil(E.y) + (relx) - (size/2) );
+                                           break;
+                                      case 180 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) + slen,
+                                              u2mil(E.y) + (rely) + (size/2));
+                                           break;
+                                      case 270 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - rely + slen,
+                                              u2mil(E.y) + relx + (size/2) );
+                                           break;
+                                      }
+                                   break;
+                                case 180 :
+                                  switch(trotate) {
+                                      case   0 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (relx) - slen,
+                                              u2mil(E.y) - (rely) - (size/2) );
+                                           break;
+                                      case  90 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (relx) + (size/2),
+                                              u2mil(E.y) - (rely) - slen );
+                                           break;
+                                      case 180 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (relx) - slen,
+                                              u2mil(E.y) - (rely) - (size/2) );
+                                           break;
+                                      case 270 :
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (relx) - slen,
+                                              u2mil(E.y) + (rely) - (size/2) );
+                                           break;
+                                      }
+                                   break;
+                                case 270 :
+                                   switch(trotate) {
+                                      case   0 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (rely) + (size/2),
+                                              u2mil(E.y) - (relx) - slen );
+                                           break;
+                                      case  90 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + (rely) - slen,
+                                              u2mil(E.y) - relx - (size/2) );
+                                           break;
+                                      case 180 :
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) - (relx) + (size/2),
+                                              u2mil(E.y) + (rely) - slen);
+                                            break;
+                                      case 270 :
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("ROTATE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                                           printf("MOVE (%.2f %.2f) (%.2f %.2f);\n",
+                                              u2mil(T.x), u2mil(T.y),
+                                              u2mil(E.x) + rely + slen,
+                                              u2mil(E.y) - relx + (size/2) );
+                                           break;
+                                      }
+                                   break;
+                                default  : if(dlgMessageBox("Rotation only in 0, 90, 180, 270 drgree", "OK", "ESC") != 0) exit (0);
+                                }
+                             }
+                          else dlgMessageBox( s[n+0] + "\nPackage und Textplatzhalter ungleiche Rotation", "OK");
+                          }
+                       else printf("DELETE (%.2f %.2f);\n", u2mil(T.x), u2mil(T.y) );
+                       }
+                    }
+                 }
+              }
+           }
+        printf("DISPLAY 1 16 17 18 20 21 -23 49;\n");
+        printf("GRID LAST;\n");
+        printf("# WRITE;\n");
+        }
+     }
+   exit ("SCRIPT '" + scriptfile + "';\n");
+   }
+void test(char cc) {
+   sprintf(st, "Caracter=>%c<\n", cc);
+   if (dlgMessageBox("Character =" + st, "&Yes", "&No") != 0) {
+      exit (0);
+      }
+   return ;
+   }
+real val2mil(string val) {
+   return strtod(val) * xScale;
+   }
+real v2mil(real val) {
+   return val * xScale;
+   }
+string format(real rval) {
+    string fmt;
+    sprintf(fmt, "%.3f", rval);
+    return fmt;
+    }
+void rwire( int netnr, int layer, real x1, real y1, real x2, real y2) {
+   string w;
+   if (netnr < 0) {
+      string h;
+      sprintf(h, "Netz#=%d\n", netnr);
+      dlgMessageBox(h, "OK");
+      }
+   cmdroute += "CHANGE LAYER " + refLayer[layer] + ";\n";
+   if(netname[netnr] != "") {
+      sprintf(w, "WIRE '%s' (%s %s) (%s %s);\n", netname[netnr],
+               format(v2mil(x1)), format(v2mil(y1)),
+               format(v2mil(x2)), format(v2mil(y2)) );
+      }
+   else {
+      sprintf(w, "WIRE (%s %s) (%s %s);\n",
+               format(v2mil(x1)), format(v2mil(y1)),
+               format(v2mil(x2)), format(v2mil(y2)) );
+      }
+   cmdroute += w;
+   return ;
+   }
+void route(int layer, real coord1, real coord2, real coord3, int Netnr, int Code, int Type, int Orient) {
+   cmdroute += "CHANGE Layer " + refLayer[layer] + ";\n";
+   cmdroute += "CHANGE WIDTH " + format(v2mil(tracewidth[Code])) + ";\n" ;
+   switch (Orient) {
+      case    1 : rwire(Netnr, layer, coord2, coord1, coord3, coord1);
+                  break;
+      case    2 : rwire(Netnr, layer, coord1, coord2, coord1, coord3);
+                  break;
+      case    4 : rwire(Netnr, layer, coord2 + ((coord1 - coord2) / 2 ) ,
+                        (coord1 - coord2) / -2, coord3 + ((coord1 - coord3) / 2 ) ,
+                        (coord1 - coord3) / -2);
+                  break;
+      case    8 : rwire(Netnr, layer, coord2 - ((coord2 - coord1) / 2 ) ,
+                        (coord2 - coord1) / -2, coord3 - ((coord3 - coord1) / 2 ) ,
+                        (coord3 - coord1) / -2);
+                  break;
+      default: {
+                 string o;
+                 sprintf(o, "Route error:\nLayer=%d\n%.2f\n%.2f\n%.2f\nN#%d\nC=%d\nT=%d\nO=%d\n",
+                             layer, coord1, coord2, coord3, Netnr, Code, Type,Orient);
+                 if (dlgMessageBox(o, "&Yes", "&No") != 0) exit (0);
+               }
+      }
+   return ;
+   }
+void arcDraw( int Layer, real X, real Y, real Radius, real arcs, real arce, int Netnr, int TraceCode, string TraceType) {
+   string as;
+   sprintf (as, " Change Layer %s;\n", refLayer[Layer]);
+   if (arce == 360) {
+      sprintf (as, " Circle (%.3f %.3f) (%.3f %.3f);\n",X, Y, X + Radius, Y);
+      arcscript += as;
+      }
+   else {
+      real arcStart = 360 + (arcs);
+      if (arcStart > 360) arcStart -= 360;
+      real arcEnd = arcStart + (arce);
+      if (arcEnd > 360) arcEnd -= 360;
+      real xArcStart = Radius * cos(PI / 180 * arcStart);
+      real yArcStart = Radius * sin(PI / 180 * arcStart);
+      real xArcEnd   = Radius * cos(PI / 180 * arcEnd);
+      real yArcEnd   = Radius * sin(PI / 180 * arcEnd);
+      sprintf (as, " ARC CCW (%.3f %.3f) (%.3f %.3f) (%.3f %.3f);\n",
+                  X + xArcStart, Y + yArcStart,
+                  X - xArcStart, Y - yArcStart,
+                  X + xArcEnd, Y + yArcEnd);
+      arcscript += as;
+      }
+   return;
+}
+string scriptheader(void) {
+   string scrh = "Grid " + Grid + " FINEST;\n";
+   scrh += "Grid ON;\nSET UNDO_LOG OFF;\nSET WIRE_BEND 2;\n";
+   scrh += "LAYER 125 Alias;\n";
+   return scrh ;
+   }
+string readTstring(void) {
+   string s = "";
+   do {
+      if (c[n] == cr) {
+         n++;
+         return s;
+         }
+      else {
+         s += c[n];
+         n++;
+         }
+      } while (c[n]);
+   }
+string read(char srch, int rdlf) {
+   string s = "";
+   do {
+      if (c[n] != ' ') {
+         break;
+         }
+      else n++;
+      } while (c[n]);
+   do {
+      if (c[n] != cr) {
+         break;
+         }
+      else n++;
+      } while (c[n]);
+   do {
+      if (c[n] != lf) {
+         break;
+         }
+      else {
+         n++;
+         if (rdlf) {
+            return s;
+            }
+         }
+      } while (c[n]);
+   do {
+      if (c[n] == ';' || c[n] == ':') {
+         if (s == "") {
+            string cc;
+            sprintf(cc, "%c", c[n]);
+            return cc;
+            }
+         else return s;
+         }
+      if (c[n] == srch || c[n] == cr) {
+         n++;
+         return s;
+         }
+      else {
+         s += c[n];
+         n++;
+         }
+      } while (c[n]);
+   return s;
+  }
+string readstring(char separ, char eol, char sepline) {
+   string sline = "";
+   do {
+      string wx = read(separ, 0);
+      if (wx[0] ==eol || wx[0] == sepline) {
+         if ( sline == "") {
+            return wx;
+            }
+         else return sline;
+         }
+      string wy = read(separ, 1);
+      sprintf(st, "(%s %s) ", format(val2mil(wx)), format(val2mil(wy)));
+      sline += st;
+      } while (c[n]);
+   sprintf(st, "%d", n);
+   if(dlgMessageBox( "Progr. end by counter " + st , "&Yes", "&No") != 0) exit (0);
+   exit (0);
+   }
+void Headerfield(void) {
+   n++;
+   costomer = read(lf, 0);
+   versionnumb = read(' ', 0);
+   revisionnum = read(' ', 0);
+   for (int v = 0; v < VersionCnt; v++) {
+      if (versionnumb + revisionnum == ULTIversion[v]) {
+         xScale = 1 / ULTIscale[v];
+         rotatemultiple = rotatemult[v];
+         break;
+         }
+      }
+   printf("%s", scriptheader());
+   boardoutline[1] = strtol(read(',', 0));
+   boardoutline[2] = strtol(read(',', 0));
+   boardoutline[3] = strtol(read(',', 0));
+   boardoutline[4] = strtol(read(',', 0));
+   def_grid        = strtol(read(',', 0));
+   int   grid_step = strtol(read(',', 0));
+   string swaplevel = read(',', 0);
+   int   max_layers = strtod(read(';', 0));
+   n++;
+   string layerlaminat = read(' ', 0);
+   refpointx = strtol(read(',', 0));
+   refpointy = strtol(read(cr, 0));
+   string routeroptions[];
+   int x = 0;
+      routeroptions[0] = read(' ', 0);
+      st = routeroptions[0] ;
+   do {
+      x++;
+      routeroptions[x] = read(' ', 1);
+      st += " " + routeroptions[x];
+      } while (routeroptions[x] != "");
+   x = 1;
+      layerDirection[x] = read(' ', 0);
+   do {
+      st += "\nLayer " + refLayer[x] + "=" + layerDirection[x];
+      x++;
+      layerDirection[x] = read(' ', 1);
+      } while (layerDirection[x] != "");
+   string powerplanes[];
+   for (int p = 1; p <= 32; p++) {
+      powerplanes[p] = read(' ', 0);
+      }
+   return ;
+  }
+void padset(void) {
+   n++;
+   string padsetword = read(cr, 1);
+   return ;
+   }
+void TraceCode(void) {
+   n++;
+   string nb = read(',', 0);
+   int number = strtol(nb);
+   tracewidth[number] = strtol(read(',', 0));
+   traceclearance[number] = strtol(read(cr, 1));
+   return ;
+   }
+void Drilltolerance(void) {
+   n++;
+   drilltolerance = strtol(read(' ', 0));
+   drilltolerancevalue = strtol(read(cr, 0));
+   return ;
+   }
+void DrillCode(void) {
+   n++;
+   string nb = read(',', 0);
+   int number = strtol(nb);
+   drillcode[number] = strtod(read(cr, 1));
+   return ;
+   }
+void PadDefinitionInner(void) {
+   n++;
+   string nb = read(',', 0);
+   int number = strtol(nb);
+   pad0innerX1[number] = strtol(read(',',0));
+   pad0innerX2[number] = strtol(read(',',0));
+   pad0innerY[number] = strtol(read(',',0));
+   pad0innerRadius[number] = strtol(read(',',0));
+   pad0innerClear[number] = strtol(read(',',0));
+   pad0innerHorizont[number] = strtol(read(',',0));
+   pad0innerVertical[number] = strtol(read(',',0));
+   pad0innerThermH[number] = strtol(read(',',0));
+   pad0innerThermV[number] = strtol(read(cr, 1));
+   return ;
+}
+void PadDefinitionTop(void) {
+   n++;
+   string nb = read(',', 0);
+   int number = strtol(nb);
+   pad1topX1[number] = strtol(read(',', 0));
+   pad1topX2[number] = strtol(read(',', 0));
+   pad1topY[number] = strtol(read(',', 0));
+   pad1topRadius[number] = strtol(read(',', 0));
+   pad1topClear[number] = strtol(read(',', 0));
+   pad1topHorizont[number] = strtol(read(',', 0));
+   pad1topVertical[number] = strtol(read(',', 0));
+   pad1topThermH[number] = strtol(read(',', 0));
+   pad1topThermV[number] = strtol(read(cr, 1));
+   return ;
+   }
+void PadDefiniBottom(void) {
+   n++;
+   string nb = read(',', 0);
+   int number = strtol(nb);
+   pad2bottomX1[number] = strtol(read(',', 0));
+   pad2bottomX2[number] = strtol(read(',', 0));
+   pad2bottomY[number] = strtol(read(',', 0));
+   pad2bottomRadius[number] = strtol(read(',', 0));
+   pad2bottomClear[number] = strtol(read(',', 0));
+   pad2bottomHorizont[number] = strtol(read(',', 0));
+   pad2bottomVertical[number] = strtol(read(',', 0));
+   pad2bottomThermH[number] = strtol(read(',', 0));
+   pad2bottomThermV[number] = strtol(read(cr, 1));
+   return ;
+   }
+void WaveSolderDir(void) {
+   n++;
+   string WaveSolder = read(' ', 0);
+   string WaveSolderDir = read(' ', 0);
+   string WaveSolderClear = read(cr, 1);
+   return ;
+   }
+void testxy(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, int ox, int oy) {
+   sprintf(st, "s(%s %s)\n2(%s %s)\n3(%s %s)\n4(%s %s)\no(%s %s)" ,
+            format(v2mil(x1)), format(v2mil(y1)),
+            format(v2mil(x2)), format(v2mil(y2)),
+            format(v2mil(x3)), format(v2mil(y3)),
+            format(v2mil(x4)), format(v2mil(y4)),
+            format(v2mil(ox)), format(v2mil(oy)) );
+   dlgDialog("Koordinaten?") {
+      dlgTextEdit(st);
+      dlgHBoxLayout {
+         dlgStretch(0);
+         dlgPushButton("+Yes") dlgAccept();
+         dlgStretch(1);
+         dlgPushButton("-Cancel") dlgReject();
+         dlgStretch(0);
+         }
+      };
+   return ;
+   }
+void outlinedescript(void) {
+   int x, y;
+   int wcnt = 0;
+   string w = "";
+   string wire = "";
+   string h;
+   int n;
+   sprintf(h, "CHANGE LAYER 21;\n");
+   wire += h;
+   do {
+      w = read(',', 0);
+      if (w == ";") {
+         break;
+         }
+      x = strtod(w);
+      y = strtod(read(',', 0));
+      if ( (x & 1) == 1) {
+         wire += ";wire\n";
+         sprintf (h, "(%s %s)\n",  format(v2mil(x - 1)), format(v2mil(y)) );
+         }
+      else {
+         sprintf (h, "(%s %s)\n",  format(v2mil(x)), format(v2mil(y)) );
+         }
+      wire += h;
+      wcnt++;
+      } while (c[n]);
+   wire += ";\n";
+   printf("%s", wire);
+   return ;
+   }
+void pindescript(void) {
+   do {
+      string padcode = read(',', 0);
+      if (strrchr(padcode, ';') == 0) {
+         n++;
+         return ;
+         }
+      int    pcodnumber      = strtol(padcode);
+      real   padcodeRotation = strtod(read(',', 0)) / rotatemultiple;
+      int    padcodelayerset = strtol(read(',', 0));
+      real   padcoderelx     = val2mil(read(',', 0));
+      real   padcoderely     = val2mil(read(',', 0));
+      string padcodepinname  = read(',', 1);
+      refPinNr[cntrefPin] = padcodepinname;
+      cntrefPin++;
+      real px1  = v2mil(pad2bottomX1[pcodnumber]);
+      real px2  = v2mil(pad2bottomX2[pcodnumber]);
+      real py   = v2mil(pad2bottomY[pcodnumber]);
+      real prad = v2mil(pad2bottomRadius[pcodnumber]);
+      real pc   = v2mil(pad2bottomClear[pcodnumber]);
+      real ph   = v2mil(pad2bottomHorizont[pcodnumber]);
+      real pv   = v2mil(pad2bottomVertical[pcodnumber]);
+      real pth  = v2mil(pad2bottomThermH[pcodnumber]);
+      real ptv  = v2mil(pad2bottomThermV[pcodnumber]);
+      real centeroffset = (px1 - px2);
+      real px = px1 + px2;
+      int pdril = drillcode[pcodnumber];
+      if(pdril != 0) {
+         printf("CHANGE DRIll %s;\n", format(v2mil(drillcode[pcodnumber])) );
+         }
+      printf("CHANGE LAYER 48;\n");
+      printf("CHANGE SIZE 32;\n");
+      if (py == 0) {
+         dlgDialog("Warning") {
+            dlgHBoxLayout {
+               dlgStretch(1);
+               dlgLabel("<img src=" + ulp_path + "warning.bmp>");
+               dlgStretch(1);
+            }
+            dlgLabel( "Package: "+ shapename + ";\nPad : " + padcodepinname + " / PadCode = " + padcode + "\n\nY-Value is zerro = 0; changed to 1 Mil\n", 1);
+            dlgPushButton("+&Accept") dlgAccept();
+            dlgPushButton("-&Cancel") { dlgReject(); exit(-1); }
+            py = 1;
+            px = 1;
+            };
+         }
+      printf("CHANGE LAYER 21;\n");
+      if(pdril == 0) {
+          int roundness = prad / (py / 200) ;
+          printf("CHANGE LAYER %s;\n", refLayer[padcodelayerset]);
+          if (centeroffset == 0) {
+             if (padcodeRotation == 90 || padcodeRotation == 270) {
+                printf("SMD %.3f %.3f -%d '%s' (%s %s);\n", py, px, roundness, padcodepinname, format(padcoderelx), format(padcoderely) );
+                }
+             else {
+                printf("SMD %.3f %.3f -%d '%s' (%s %s);\n", px, py, roundness, padcodepinname, format(padcoderelx), format(padcoderely) );
+                }
+             }
+          else {
+             printf("SMD %.3f %.3f -%d '%s' (%s %s);\n", px, py, roundness, padcodepinname, format(padcoderelx), format(padcoderely) );
+             }
+          }
+      else {
+         if (centeroffset == 0 && px == py) {
+            if (prad < px / 2) {
+               printf("CHANGE SHAPE SQUARE;\n");
+               }
+            else {
+               printf("CHANGE SHAPE ROUND;\n");
+               }
+            printf("CHANGE DIAMETER %s;\n", format(px) );
+            }
+         else {
+            if (centeroffset == 0) {
+               if (padcodeRotation == 90 || padcodeRotation == 270) {
+                  printf("CHANGE SHAPE YLongOct;\n");
+                  printf("CHANGE DIAMETER %s;\n", format(py) );
+                  }
+               else {
+                  printf("CHANGE SHAPE XLongOct;\n");
+                  printf("CHANGE DIAMETER %s;\n", format(py) );
+                  }
+               }
+            else {
+               printf("CHANGE SHAPE OCTAGON;\n");
+               if (py > px1 || py > px2) {
+                  printf("CHANGE DIAMETER %s;\n", format(py) );
+                  }
+               else {
+                  printf("CHANGE DIAMETER %s;\n", format(px2) );
+                  }
+               }
+            }
+         printf("PAD '%s' (%s %s);\n", padcodepinname, format(padcoderelx), format(padcoderely) );
+         }
+      } while (c[n]);
+      return ;
+   }
+void arcdescript(void) {
+   do {
+      string arcxs = read(',', 0);
+      if (strrchr(arcxs, ';') == 0) {
+         n++;
+         return ;
+         }
+      real arcx = val2mil(arcxs);
+      real arcy = val2mil(read(',', 0));
+      real arcradius = val2mil(read(',', 0));
+      real ang1 = strtod(read(',', 0)) / rotatemultiple ;
+      real ang2 = strtod(read(',', 1)) / rotatemultiple ;
+      printf("CHANGE LAYER 21;\n");
+      if(ang1 == 0 && ang2 == 360) {
+         printf("CIRCLE (%s %s) (%s %s);\n", format(arcx), format(arcy), format(arcx - arcradius), format(arcy) );
+         }
+      else {
+         real endangle = ang1 + ang2;
+         if (endangle >= 360) {
+            endangle -= 360;
+            }
+         real startXarc = arcradius * cos(PI / 180 * ang1);
+         real startYarc = arcradius * sin(PI / 180 * ang1);
+         real endXarc = arcradius * cos(PI / 180 * endangle);
+         real endYarc = arcradius * sin(PI / 180 * endangle);
+         printf("ARC CCW (%s %s) (%s %s) (%s %s);\n",
+              format(arcx + startXarc), format(arcy + startYarc),
+              format(arcx - startXarc), format(arcy - startYarc),
+              format(arcx + endXarc),   format(arcy + endYarc) );
+         }
+      } while (c[n]);
+   return ;
+   }
+void ShapeDef(void) {
+   n++;
+   shapename = read(cr, 1);
+   printf("EDIT '" + shapename + ".PAC';\n");
+   printf("CHANGE FONT VECTOR;\n");
+   real ShapeNameRelx   = val2mil(read(' ', 0));
+   real ShapeNameRely   = val2mil(read(' ', 0));
+   real ShapeNameHeight = val2mil(read(' ', 0));
+   real ShapeNameRotate = strtod(read(' ', 0));
+   real ShapeNameWidth  = val2mil(read(' ', 0));
+   real ShapeNameThickness = strtod(read(' ', 1));
+   real AliasNameRelx   = val2mil(read(' ', 0));
+   real AliasNameRely   = val2mil(read(' ', 0));
+   real AliasNameHeight = val2mil(read(' ', 0));
+   real AliasNameRotate = strtod(read(' ', 0));
+   real AliasNameWidth  = val2mil(read(' ', 0));
+   real AliasNameThickness = strtod(read(' ', 1));
+   if (ShapeNameHeight == 0) {
+      ShapeNameHeight = 1;
+      }
+   real strglen2 = stringLength(shapename, ShapeNameHeight) / 2;
+   printf ("CHANGE SIZE %s;\n", format(ShapeNameHeight ) );
+   printf ("CHANGE LAYER 25;\n");
+   printf ("TEXT '>NAME' (%s %s);\n", format(ShapeNameRelx - strglen2), format(ShapeNameRely - (ShapeNameHeight / 2)) );
+   if (AliasNameHeight == 0) {
+      AliasNameHeight = 1;
+      }
+   strglen2 = stringLength(shapename, AliasNameHeight) / 2;
+   printf ("CHANGE SIZE %s;\n", format(AliasNameHeight) );
+   printf ("CHANGE LAYER 27;\n");
+   printf ("TEXT '>VALUE' (%s %s);\n", format(AliasNameRelx), format(AliasNameRely- (AliasNameHeight / 2)) );
+   n++;
+   string RthJuncBoard = read(cr, 1);
+   outlinedescript();
+   n++;
+   cntShape++;
+   pointPackPin[cntShape] = cntrefPin;
+   refPackname[cntShape] = shapename;
+   pindescript();
+   arcdescript();
+   return ;
+   }
+string nnameCheck(string name, int nb) {
+   name = strsub(name, 1);
+   if (name == "") {
+      sprintf(name, "SB$%d", nb);
+      }
+   int ch;
+   do {
+      ch = strchr( name, '\'');
+      if (ch == -1) break;
+      else name[ch] = '/';
+      } while (ch != -1);
+   return name;
+   }
+void NetDef(void) {
+   n+= 2;
+   net++;
+   netname[net] = read(' ' ,0);
+   if(netname[net] == "65535") {
+     netname[net] = "";
+     dlgMessageBox("NEt 65535","OK");
+     }
+   nettracecode[net] = strtod(read(' ' ,0));
+   netxlo[net] = strtol(read(' ' ,0));
+   netxhi[net] = strtol(read(' ' ,0));
+   netylo[net] = strtol(read(' ' ,0));
+   netyhi[net] = strtol(read(' ' ,0));
+   netxsum[net] = strtol(read(' ' ,0));
+   netysum[net] = strtol(read(' ' ,0));
+   netpincount[net] = strtod(read(';' ,1));
+   netname[net] = nnameCheck(netname[net], net);
+   return ;
+   }
+string GenNet(void) {
+     string sign = "";
+      for (int s = 0; s <= net; s++) {
+         string sig;
+         sprintf(sig, "SIGNAL '%s'\n%s\n", netname[s], signal[s] );
+         sign += sig;
+         }
+   return sign;
+   }
+void ComponentDef(void) {
+   n += 1;
+   comp++;
+   string componentName      = read(' ', 0);
+   string componentAlias     = read(' ', 0);
+   string componentShapename = read(cr, 1);
+   real componentX           = val2mil(read(',', 0));
+   real componentY           = val2mil(read(',', 0));
+   real componentRotate      = strtod(read(',', 0)) / rotatemultiple;
+   real componentNameX       = val2mil(read(',', 0));
+   real componentNameY       = val2mil(read(',', 0));
+   real componentNameRotate  = strtod(read(',', 0)) / rotatemultiple;
+   real componentNameHeight  = val2mil(read(',', 0));
+   real componentNameWidth   = val2mil(read(',', 0));
+   real componentNameThick   = strtod(read(',', 0));
+   real componentAliasX      = val2mil(read(',', 0));
+   real componentAliasY      = val2mil(read(',', 0));
+   real componentAliasRotate = strtod(read(',', 0)) / rotatemultiple;
+   real componentAliasHight  = val2mil(read(',', 0));
+   real componentAliasWidth  = val2mil(read(',', 0));
+   real componentAliasThick  = val2mil(read(cr, 1));
+   string ca;
+   sprintf(ca, "CHANGE LAYER 27;\n");
+   cmdvalue += ca;
+   if (componentAliasHight == 0) componentAliasHight = 1;
+   sprintf (ca, "change size %s;\n", format(componentAliasHight) );
+   cmdvalue += ca;
+   if (componentAliasThick <= 0) componentAliasThick = 50;
+   sprintf (ca, "change ratio %.0f;\n", componentAliasThick / 100 * TextRatio );
+   cmdvalue += ca;
+   sprintf(ca, "TEXT '%s' R%.0f (%s %s);\n", componentAlias, componentAliasRotate, format(componentAliasX), format(componentAliasY) );
+   cmdvalue += ca;
+   real stringlengh_2 = stringLength(componentName, componentNameHeight ) / 2;
+   sprintf(ca, "%s\n%.2f\n%.0f\n%s\n%s\n", componentName, stringlengh_2, componentNameRotate, format(componentNameX), format(componentNameY) );
+   cmdchname += ca;
+   sprintf (ca, "%s\n", format(componentNameHeight) );
+   cmdchname += ca;
+   sprintf (ca, "%.0f\n", componentNameThick / 100 * TextRatio );
+   cmdchname += ca;
+   real componentXforceVect = val2mil(read(',', 0));
+   real componentYforceVect = val2mil(read(',', 0));
+   real componentTempcase = val2mil(read(',', 0));
+   real componentTempjunc = val2mil(read(',', 0));
+   real componentPower = val2mil(read(',', 0));
+   real componentRTHjuncboard = val2mil(read(',', 0));
+   real nul                   = val2mil(read(cr, 0));
+   sprintf(st, "ADD %s '%s' R%.0f (%s %s);\n", componentShapename, componentName, componentRotate, format(componentX), format(componentY) );
+   brd += st;
+   sprintf(st, "SMASH (%s %s);\n", format(componentX), format(componentY) );
+   brd += st;
+   int pin = 0;
+   int z = 0;
+   for ( int p = 0 ; p <= cntShape ; p++ ) {
+      if ( componentShapename == refPackname[p]) {
+         z = pointPackPin[p];
+         break ;
+         }
+      }
+   do {
+      string componentNetNr = read(' ', 0);
+      string componentPadSetting = read(' ', 1);
+      if (componentNetNr == ";") break;
+      int NetNr = strtod(componentNetNr);
+      if (NetNr <= net) {
+         string sig;
+         sprintf(sig, "%s %s\n", componentName, refPinNr[z + pin]);
+         signal[NetNr] += sig;
+         pin++;
+         }
+      } while (c[n]);
+   n--;
+   return ;
+   }
+void LTrace(void) {
+  n++;
+  int Tracelayer = strtol(read(' ', 0));
+  real Tracecoord1 = strtod(read(cr, 0));
+  n++;
+  do {
+     string Tracec2 = read(' ', 0);
+     if (Tracec2 == ";") { n++; break;}
+     real Tracecoord2 = strtod(Tracec2);
+     real Tracecoord3 = strtod(read(' ', 0));
+     int TraceNetnr = strtol(read(' ', 0));
+     int TraceCode = strtol(read(' ', 0));
+     int TraceType = strtol(read(' ', 0));
+     int TraceOrient = strtol(read(' ', 0));
+     route(Tracelayer, Tracecoord1, Tracecoord2, Tracecoord3, TraceNetnr, TraceCode, TraceType, TraceOrient);
+     } while (c[n]);
+   return ;
+   }
+void LVector() {
+   n++;
+   int    VectLayer     = strtod(read(' ', 0));
+   real   VectX1        = strtol(read(' ', 0));
+   real   VectY1        = strtol(read(' ', 0));
+   real   VectX2        = strtol(read(' ', 0));
+   real   VectY2        = strtol(read(' ', 0));
+   int    VectNetnr     = strtod(read(' ', 0));
+   int    VectTraceCode = strtod(read(' ', 0));
+   string VectTraceType = read(cr, 1);
+   rwire(VectNetnr, VectLayer, VectX1, VectY1, VectX2, VectY2);
+   return ;
+   }
+void LArc(void) {
+   n++;
+   int    ArcLayer     = strtod(read(' ', 0));
+   real   ArcX         = val2mil(read(' ', 0));
+   real   ArcY         = val2mil(read(' ', 0));
+   real   ArcRadius    = val2mil(read(' ', 0));
+   real   Arc1         = strtol(read(' ', 0)) / rotatemultiple;
+   real   Arc2         = strtol(read(' ', 0)) / rotatemultiple;
+   int    ArcNetnr     = strtod(read(' ', 0));
+   int    ArcTraceCode = strtod(read(' ', 0));
+   string ArcTraceType = read(cr, 1);
+   arcDraw( ArcLayer, ArcX, ArcY, ArcRadius, Arc1, Arc2, ArcNetnr, ArcTraceCode, ArcTraceType);
+   return ;
+   }
+string polygonstart(void) {
+   string polygx1 = read(' ', 0);
+   string polygy1 = read(' ', 0);
+   string polystart;
+   sprintf(polystart, "(%s %s) ", format(val2mil(polygx1)), format(val2mil(polygy1)));
+   return polystart;
+   }
+void LPolygon(void) {
+   n++;
+   int    PolyLayer     = strtod(read(' ', 0));
+   int    PolyNetnr     = strtod(read(' ', 0));
+   string PolyPattern   = read(' ', 0);
+   string PolyDummy     = read(' ', 0);
+   int    PolyDist      = strtod(read(' ', 0));
+   int    PolyCode      = strtod(read(' ', 0));
+   int    PolyClearance = strtod(read(' ', 0));
+   string PolyType      = read(cr, 1);
+   string pld;
+   sprintf(pld , "\n Layer %d\n Net %s\n Pattern %s\n Dist %d\n Code %d\n Clearance %d\n Type %s\n Dummy %s",
+                     PolyLayer,
+                     netname[PolyNetnr],
+                     PolyPattern,
+                     PolyDist,
+                     PolyCode,
+                     PolyClearance,
+                     PolyType,
+                     PolyDummy
+                     );
+   n++;
+   polygon += "CHANGE LAYER " + refLayer[PolyLayer] + ";\n";
+   polygon += "CHANGE ORPHANS ON;\n";
+   polygon += "CHANGE WIDTH " + format(v2mil(nettracecode[PolyNetnr])) + ";\n";
+   polygon += "CHANGE ISOLATE " + format(v2mil(PolyCode)) + ";\n";
+   int fillpoly = 1;
+   string polystart = polygonstart();
+   polygon += "POLYGON " + "'" + netname[PolyNetnr] + "' " + polystart ;
+   string TotalPolygon = "";
+   do {
+      string TotalPolygon = readstring(' ',  semikolon, polysepar);
+      if(TotalPolygon[0] == semikolon) {
+         n++;
+         polygon += ";\n";
+         return;
+         }
+      if(TotalPolygon[0] == polysepar) {
+         n+= 3;
+         fillpoly = 0;
+         polystart = polygonstart();
+         if (fillpoly) {
+            polygon += ";\nPOLYGON " + "'" + netname[PolyNetnr] + "' " + polystart ;
+            }
+         TotalPolygon = "";
+         }
+      else {
+         if (fillpoly) {
+            polygon += TotalPolygon;
+            TotalPolygon = "";
+            polygon += polystart;
+            }
+         polystart = polygonstart();
+         }
+      } while (c[n]);
+   }
+void ViaList(void) {
+   n++;
+   string via;
+   int ViaX = strtod(read(cr, 1));
+   do {
+      string VY = read(' ', 0);
+      if (VY == ";") break;
+      int    ViaY      = strtod(VY);
+      int    ViaNetnr       = strtod(read(' ', 0));
+      int    ViaPadCode     = strtod(read(' ', 0));
+      string ViaPadSetting  = read(' ', 0);
+      real   ViaPadRotation = strtol(read(' ', 0)) / 32;
+      int    ViaPadShift    = strtod(read(' ', 0));
+      string ViaIndex = read(' ', 0);
+      string ViaGLueFlag = read(';', 1);
+      sprintf(via , "CHANGE SHAPE ROUND;\n");
+      brd += via;
+      sprintf(via , "CHANGE DIAMETER %s;\n", format(v2mil( pad2bottomY[ViaPadCode])) );
+      brd += via;
+      sprintf(via , "CHANGE DRILL %s;\n", format(v2mil( drillcode[ViaPadCode])) );
+      brd += via;
+      sprintf(via , "VIA '%s' (%s %s);\n", netname[ViaNetnr], format(v2mil(ViaX)), format(v2mil(ViaY)) );
+      brd += via;
+      } while (c[n]);
+   return ;
+   }
+void Text(void) {
+   n++;
+   string text;
+   real TextX         = strtod(read(' ', 0));
+   real TextY         = strtod(read(' ', 0));
+   real TextHeight    = strtod(read(' ', 0));
+   real TextWidth     = strtod(read(' ', 0));
+   real TextThick     = strtod(read(' ', 0));
+   real TextRotation  = strtod(read(' ', 0)) / rotatemultiple;
+   int TextLayer      = strtod(read(' ', 0));
+   string TextString  = readTstring();
+   real strgLength2 = stringLength( TextString, TextHeight) / 2;
+   sprintf(text, "CHANGE SIZE %s\n", format(v2mil(TextHeight)) );
+   brd += text;
+   sprintf( text, "CHANGE LAYER %s;\n", refLayer[TextLayer]);
+   brd += text;
+   int ro = TextRotation;
+   if (TMrefLayer[TextLayer] == "M") {
+      strgLength2 = (strgLength2 * -1);
+      }
+   switch (ro) {
+      case   0 : sprintf(text , "TEXT '%s' %sR%.0f (%s %s);\n",
+                         TextString, TMrefLayer[TextLayer], TextRotation,
+                         format(v2mil(TextX - (strgLength2))), format(v2mil(TextY - (TextHeight / 2))) );
+             break;
+      case  90 : sprintf(text , "TEXT '%s' %sR%.0f (%s %s);\n",
+                         TextString, TMrefLayer[TextLayer], TextRotation,
+                         format(v2mil(TextX + (TextHeight / 2))), format(v2mil(TextY - (strgLength2))) );
+             break;
+      case 180 : sprintf(text , "TEXT '%s' %sR%.0f (%s %s);\n",
+                         TextString, TMrefLayer[TextLayer], TextRotation,
+                         format(v2mil(TextX + (strgLength2))), format(v2mil(TextY + (TextHeight / 2))) );
+             break;
+      case 270 : sprintf(text , "TEXT '%s' %sR%.0f (%s %s);\n",
+                         TextString, TMrefLayer[TextLayer], TextRotation,
+                         format(v2mil(TextX - (TextHeight / 2))), format(v2mil(TextY + strgLength2)) );
+             break;
+      }
+   brd += text;
+   return ;
+   }
+void RecTechnology(void) {
+  n++;
+  switch (c[n]) {
+     case    'P' : padset();
+                     break;
+     case    'T' : TraceCode();
+                     break;
+     case    'C' : Drilltolerance();
+                     break;
+     case    'D' : DrillCode();
+                     break;
+     case    '0' : PadDefinitionInner();
+                     break;
+     case    '1' : PadDefinitionTop();
+                     break;
+     case    '2' : PadDefiniBottom();
+                     break;
+     case    'S' : WaveSolderDir();
+                     break;
+     }
+   return ;
+  }
+void SubRecordL(void) {
+  n++;
+  switch (c[n]) {
+     case    'T' : LTrace();
+                     break;
+     case    'V' : LVector();
+                     break;
+     case    'A' : LArc();
+                     break;
+     case    'P' : LPolygon();
+                     break;
+     }
+   return ;
+   }
+void Record(void) {
+  n++;
+  switch (c[n]) {
+     case    'P' : Headerfield();
+                     break;
+     case    'T' : RecTechnology();
+                     break;
+     case    'S' : ShapeDef();
+                     break;
+     case    'N' : NetDef();
+                     break;
+     case    'C' : ComponentDef();
+                     break;
+     case    'L' : SubRecordL();
+                     break;
+     case    'V' : ViaList();
+                     break;
+     case    'X' : Text();
+                     break;
+  }
+  return ;
+}
+void BRDTrailer(void) {
+   printf("CHANGE LAYER 20;\n");
+   printf("SET WIRE_BEND 0;\n");
+   printf("WIRE 0 (%s %s) (%s %s) (%s %s) ;\n",
+                 format(v2mil(boardoutline[1])),
+                 format(v2mil(boardoutline[2])),
+                 format(v2mil(boardoutline[3])),
+                 format(v2mil(boardoutline[4])),
+                 format(v2mil(boardoutline[1])),
+                 format(v2mil(boardoutline[2]))
+                  );
+   printf("CHANGE SIZE 50;\n");
+   real tx;
+   if (boardoutline[1] < boardoutline[3]) tx = boardoutline[1];
+   else tx = boardoutline[3];
+   real ty;
+   if (boardoutline[2] > boardoutline[4]) ty = boardoutline[2];
+   else ty = boardoutline[4];
+   int yy = 75;
+   printf("# 'ULTIBOARD - %s Version %s Revision %s' (%s %s);\n", costomer, versionnumb, revisionnum, format(v2mil(tx)) ,format(v2mil(ty) + yy) );
+   yy += 75;
+   printf("# 'with import filter : %s %s' (%s %s);\n", filter, Version, format(v2mil(tx)) ,format(v2mil(ty) + yy) );
+   yy += 75;
+   printf("# 'converted from ULTIBOARD-DDF file : %s at %s' (%s %s);\n", ddffile, t2string(time()), format(v2mil(tx)) ,format(v2mil(ty) + yy) );
+   yy += 75;
+   printf("# '%s' (%s %s);\n", EAGLE_SIGNATURE, format(v2mil(tx)) ,format(v2mil(ty) + yy) );
+   yy += 75;
+   }
+void sign() {
+   printf("# %s\n", EAGLE_SIGNATURE);
+   printf("# Script converted from ULTIBOARD-DDF file : %s at %s\n", ddffile, t2string(time()) );
+   printf("# with %s\n\n", filter );
+   return;
+   }
+void LBRdescript(void) {
+   printf("Description 'Library converted from <b>ULTIBOARD-DDF file</b> :<p> \\n\\\n %s at %s <p>\\n\\\n with import filter : %s';\n", ddffile, t2string(time()), filter );
+   }
+void ULPhelp(void) {
+   dlgDialog("Import ddf help") {
+      dlgStretch(0);
+      dlgHBoxLayout {
+         dlgSpacing(500);
+         }
+      dlgStretch(0);
+      dlgLabel(usage, 1);
+      dlgStretch(0);
+      dlgHBoxLayout {
+         dlgStretch(0);
+         dlgPushButton("+&OK") dlgAccept();
+         dlgStretch(0);
+         dlgPushButton("-&Cancel") {dlgReject(); exit(0);}
+         dlgStretch(1);
+         dlgPushButton("&Version Info") dlgMessageBox(ULTIBoardinfo, "OK");
+         dlgStretch(0);
+//         dlgPushButton("Hilf&e") dlgMessageBox(InfoDE, "OK");
+//         dlgStretch(0);
+         dlgPushButton("&Help") dlgMessageBox(InfoUS, "OK");
+         dlgStretch(0);
+         }
+      dlgStretch(1);
+      };
+   }
+void main(void) {
+   if (board) board(B) {
+      char bkslash = '/';
+      int pos = strrchr(argv[0], bkslash);
+      if (argv[1] == "") ULPhelp();
+      if (argv[1] == "PASS2") importpass2();
+      else {
+         if (pos >= 0) {
+            ulp_path = strsub(argv[0], 0, pos + 1);
+            }
+         filter = strsub(argv[0], pos + 1);
+         fileName = dlgFileOpen("Select a DDF-File", "", "*.ddf");
+         }
+      if (!fileName) exit (0);
+      string changetextfile = filesetext(fileName, tmpchtxtfile);
+      string scriptfile = filesetext(fileName, tmpextfile);
+      pos = strrchr(fileName, bkslash);
+      ddffile = strsub(fileName, pos + 1);
+      nBytes = fileread(c, fileName);
+      output(scriptfile, "wt") {
+         sign();
+         printf("OPEN '%s';\n", filesetext(fileName, ".lbr"));
+         LBRdescript();
+         do {
+            switch (c[n]) {
+               case    0:
+                           break;
+               case  '*':  Record();
+                           break;
+               case  ';':  break;
+               case   10:
+                           break;
+               case   12:
+                           break;
+               case   13:
+                           break;
+               case   27:  cmd += "\nEscape\n";
+                           break;
+               default:    test(c[n]);
+                           break;
+               }
+            n++;
+            } while (n <= nBytes);
+         printf("SET UNDO_LOG ON;\n");
+         printf("WRITE\n");
+         printf("CLOSE;\n");
+         sign();
+         printf("EDIT '%s'\n", filesetext(fileName, ".brd") );
+         printf("SET VECTOR_FONT ON;\n");
+         printf("%s", scriptheader());
+         printf("USE -*;\n");
+         printf("USE '%s';\n",filesetext(fileName, ".lbr") );
+         printf("\n%s\nWINDOW FIT;\n", brd);
+         printf("%s\n", GenNet() );
+         printf("%s\n", cmdroute);
+         printf("%s\n", arcscript);
+         if (polygon) printf("%s\n", polygon);
+         printf("RATSNEST;\n");
+         BRDTrailer();
+         printf("SET UNDO_LOG ON;\n");
+         printf("WINDOW FIT;\n");
+         printf("WRITE;\n");
+         printf("RUN '%s' 'PASS2' '%s';\n", argv[0], changetextfile);
+         }
+      output(changetextfile, "wt") {
+         printf("%s\n", cmdchname);
+         }
+      string ecmd = "SCRIPT '" + scriptfile + "';\n";
+      string r;
+      sprintf(r, "REMOVE '%s';\n", scriptfile);
+      ecmd += r;
+      sprintf(r, "REMOVE '%s';\n", filesetext(changetextfile, "$" + tmpextfile) );
+      ecmd += r;
+      sprintf(r, "REMOVE '%s';\n", changetextfile);
+      ecmd += r;
+      exit (ecmd);
+      }
+   else {
+      dlgMessageBox( "ERROR:\nStart this ULP from a Board", "&OK") ;
+      }
+   }

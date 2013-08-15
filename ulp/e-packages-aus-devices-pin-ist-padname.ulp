@@ -1,0 +1,78 @@
+#usage "<b>Generiert Dummy-Package für aktuelles Device im Bibliothekseditor</b>\n"
+       "<p>"
+
+       "Für Elektro-Bauteile empfiehlt es sich, dass Symbol-Pins und Package-Pads gleiche "
+       "Namen haben. Dieses Programm erzeugt ein Package mit identischen Pad-/Pin-Namen, "
+       "falls kein Pin-Name doppelt vorkommt.<p>"
+       "Starten Sie das Programm im Bibliothekseditor, sobald Sie ein Device angelegt "
+       "und die Symbole mit dem Add-Befehl geholt haben. Es wird ein Package angelegt, "
+       "dessen Name dem des Device entspricht (falls noch nicht vorhanden) und dessen "
+       "Pads entsprechend den Pins benannt sind. Pins und Pads sind mit dem Connect-Befehl "
+       "verbunden.<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+
+string cmd, concmd, s;
+string f;
+string PadName;
+string CurrentDevice;
+int    PackagePresent = 0;
+int    PADname;
+
+if (library) {
+   library(L) {
+     f = filename(L.name);
+     f = filesetext(f, "$$$.scr");
+     f = path_scr[0] + '/' + f;    // verwende Script-Pfad
+     if (deviceset) {
+        deviceset(DS) {
+          CurrentDevice = DS.name;
+          DS.devices(D) {
+             if (!D.package && CurrentDevice == DS.name) {
+                sprintf(s, "EDIT %s.PAC;\n", DS.name);
+                cmd += s;
+                sprintf(s, "DESCRIPTION 'Dummy';\n");
+                cmd += s;
+                sprintf(s, "GRID MM; CHANGE DRILL 0.5; CHANGE DIAMETER 1.0;\n");
+                cmd += s;
+                sprintf(s, "EDIT %s.DEV;\n", DS.name);
+                concmd += s;
+                sprintf(s, "PAC '%s' '';\n", DS.name);
+                concmd += s;
+                DS.gates(G) {
+                   G.symbol.pins(P) {
+                     PadName = (P.name);
+                     sprintf(s, "PAD '%s' (%.4f %.4f);\n", PadName, u2mm(P.x), u2mm(P.y)-7.62 );  // Pin-Offset im Device in Y-Richtung
+                     cmd += s;
+                     sprintf(s, "CONNECT %s.%s %s;\n", G.name, P.name, PadName);
+                     concmd += s;
+                     }
+                   }
+               }
+             }
+           }
+        }
+   L.packages(P) {
+     if (CurrentDevice == P.name) PackagePresent = 1;
+     }
+   }
+   cmd += concmd;
+   if (cmd && !PackagePresent) {
+      dlgDialog("Check") {
+        dlgHBoxLayout dlgSpacing(500);
+        dlgHBoxLayout {
+          dlgVBoxLayout dlgSpacing(500);
+          dlgTextEdit(cmd);
+          }
+        dlgHBoxLayout {
+          dlgPushButton("OK") dlgAccept();
+          dlgPushButton("Abbrechen") { dlgReject(); exit(-1); }
+          }
+        };
+      output(f, "wtD") printf("%s", cmd); // temporäre Script-Datei erzeugen
+      exit("SCRIPT '"+ f +"'");
+      }
+   else dlgMessageBox("Device hat schon ein Package oder Package mit dem Namen des Device schon vorhanden.", "OK");
+   }
+
+   else dlgMessageBox("Das ULP kann nur vom Bibliothekseditor aus geladen werden!", "OK");

@@ -1,0 +1,245 @@
+#usage "<b>Normalize silkscreen text sizes</b><HR>\n"
+       "<p>This ULP program smashes all texts on the silkscreen layers. It then normalizes the "
+       "texts so that they all have the same size and thickness. Ratio is calculated from "
+       "the desired thickness.</p>"
+       "<author>Author: Tennessee Carmel-Veilleux (veilleux@ameth.org)</author>"
+
+/****************************************************************************************
+*                                                                                       *
+*   Normalize silkscreen text sizes                                                     *
+*                                                                                       *
+*   Filename: normalize-text.ulp                                                        *
+*   Version: 1.0                                                                        *
+*   Author: Tennessee Carmel-Veilleux <veilleux@ameth.org>                             *
+*   Date: March 31st 2005                                                               *
+*   Company: Entreprises Ten Tech                                                       *
+*                                                                                       *                                                                                       *
+*   This ULP program smashes all texts on the silkscreen layers. It then normalizes the *
+*   texts so that they all have the same size and thickness. Ratio is calculated from   *
+*   the desired thickness.                                                              *
+*                                                                                       *
+****************************************************************************************/
+
+#require 5.0300;
+
+string VERSION = "1.1";  // 2008-11-07 alf@cadsoft.de
+
+int result = 0; // Dialog result
+
+string str; // Temporary string
+string cmd = "SET UNDO_LOG OFF;\n"; // Script command to execute
+real text_size = 40.0; // Text size for all texts
+real text_thickness = 8.0; // Text thickness for all texts
+int text_ratio; // Calculated text ratio
+
+int silk_screen_layers[] = {LAYER_TPLACE, LAYER_BPLACE, LAYER_TNAMES,
+                            LAYER_BNAMES, LAYER_TVALUES, LAYER_BVALUES,
+                            LAYER_TDOCU, LAYER_BDOCU, 125, 126 };
+                            // 2008-11-07 Layer 125, 126 is created by panalize.ulp.
+
+enum {UNIT_MIL, UNIT_MM};
+int  units = UNIT_MM;
+int  lastunit = units;
+text_size = 1.0;
+text_thickness = 0.1;
+
+int   visibleLayer[];
+int   actualvisible = 0;
+
+
+/* ------------- UTILITY FUNCTIONS --------------- */
+
+//
+// Redisplays the layers that were visible when the ULP was started
+//
+
+void ResetVisible(UL_BOARD B) {
+    sprintf(str, "DISP NONE;\nDISP ");
+    cmd += str;
+    B.layers(L) {
+        if (L.visible) {
+            sprintf(str, "%d ", L.number);
+            cmd += str;
+        }
+    }
+    cmd += ";\n";
+}
+
+//
+// Returns 1 if a layer is a silkscreen layer
+//
+
+int SilkScreenText(int layer) {
+    int i = 0;
+    int found = 0;
+    do {    // 2008-11-07
+      if (layer == silk_screen_layers[i]) {
+        found = 1;
+        if (actualvisible != layer) { // display only the layer with text to change
+                                      // in a script can not select texts by thew same coodiante
+          sprintf(str, "DISPLAY NONE %d;\n", layer);
+          cmd += str;
+        }
+        break;
+      }
+      i++;
+    } while(silk_screen_layers[i]);
+
+    return found;
+}
+
+//
+// Resizes a text element to the specified size and ratio
+//
+void ResizeText(UL_TEXT T, real size, int ratio) {
+    if (SilkScreenText(T.layer)) {
+        switch (units) {
+            case UNIT_MIL:
+                sprintf(str,"CHANGE SIZE %.4f (%.4f %.4f);\nCHANGE RATIO %d (%.4f %.4f);\n",
+                        size, u2mil(T.x), u2mil(T.y), ratio, u2mil(T.x), u2mil(T.y));
+                break;
+            case UNIT_MM:
+                sprintf(str,"CHANGE SIZE %.4f (%.4f %.4f);\nCHANGE RATIO %d (%.4f %.4f);\n",
+                        size, u2mm(T.x), u2mm(T.y), ratio, u2mm(T.x), u2mm(T.y));
+                break;
+        }
+        cmd += str;
+    }
+}
+
+//
+// Smashes all parts that have an associated package on the board and resize
+// all text to SIZE and RATIO.
+//
+void ProcessTexts(real size, int ratio) {
+    // Display the origins of components
+    switch (units) {
+        case UNIT_MIL:
+            sprintf(str,"GRID MIL 1;\n");
+            break;
+        case UNIT_MM:
+            sprintf(str,"GRID MM 0.1;\n");
+            break;
+    }
+    cmd += str;
+
+    cmd += "DISPLAY NONE 23 24;\n";
+
+    board(B) {
+        B.elements(E) {
+            if (E.package) {
+                // Smash the package to make sure text is CHANGE-able
+                sprintf(str,"SMASH %s;\n", E.name);
+                cmd += str;
+                // Change smashed texts
+                E.texts(T) {
+                    ResizeText(T, size, ratio);
+                }
+
+                // Change unsmashed texts
+                E.package.texts(T) {
+                    ResizeText(T, size, ratio);
+                }
+            }
+        }
+
+        // Change all manually-added texts
+        B.texts(T) {
+            ResizeText(T, size, ratio);
+        }
+
+        ResetVisible(B);
+    }
+    cmd += "GRID LAST;\nSET UNDO_LOG ON;\n";
+}
+
+/* ------------- MAIN ROUTINE --------------- */
+if (board) {
+    int actsize;
+    result = dlgDialog("Normalize silkscreen text sizes") {
+        sprintf(str,"<qt><H3><P>Normalize silkscreen text sizes %s</P></H3>"+
+                    "<P><B>By Tennessee Carmel-Veilleux (veilleux@ameth.org)</B></P>"+
+                    "<HR><P>This ULP normalizes all the text on the silkscreen layers to "+
+                    "the specified size and thickness. The ratio is automatically calculated " +
+                    "from the size and thickness.</P></qt>", VERSION);
+        dlgLabel(str);
+
+        // Options
+        dlgHBoxLayout {
+            dlgGroup("Output units") {
+                dlgRadioButton("m&il",units) {
+                    if (lastunit != units) {
+                       actsize = text_size*10000;    // 2008-11-07 calculate the value in changed unit
+                       text_size = u2mil(actsize);
+                       actsize = text_thickness*10000;
+                       text_thickness = u2mil(actsize);
+                       lastunit = units;
+                    }
+                }
+                dlgRadioButton("&mm",units) {
+                    if (lastunit != units) {
+                       actsize = text_size*(1/39.3701)*10000;
+                       text_size = u2mm(actsize);
+                       actsize = text_thickness*(1/39.3701)*10000;
+                       text_thickness = u2mm(actsize);
+                       lastunit = units;
+                    }
+                }
+            }
+            dlgSpacing(20);
+            dlgGridLayout {
+                dlgCell(0,0) dlgLabel("Text size:");
+                dlgCell(0,1) dlgRealEdit(text_size,0.1,2000.0);
+
+
+                dlgCell(1,0) dlgLabel("Text Thickness:");
+                dlgCell(1,1) dlgRealEdit(text_thickness,0.01,500.0);
+            }
+        }
+
+        // Buttons
+        dlgHBoxLayout {
+            dlgStretch(1);
+            dlgPushButton("+Normalize") dlgAccept();
+            dlgPushButton("-Cancel") dlgReject();
+        }
+    };
+
+    if (!result) exit(0);
+
+    text_ratio = int(round((text_thickness / text_size) * 100.0)) + 1;
+    if (text_ratio > 31) {
+        text_ratio = 31;
+        dlgMessageBox("!<qt><P><B>Ratio clipped to 31 !</B></P>"+
+                      "<P>Make sure that text thickness is not too large for proper ratio.</P></qt>");
+    }
+    if (units == UNIT_MM) {
+        if (text_size > 5.0) {
+            text_size = 5.0;
+            dlgMessageBox("!<qt><P><B>Text size clipped to 5.0mm !</B></P></qt>");
+        }
+    }
+    ProcessTexts(text_size, text_ratio);
+
+
+    //  EditBox
+    result = dlgDialog("Edit and execute script") {
+        dlgHBoxLayout {
+            dlgSpacing(500); // Force width of dialog to 500
+        }
+        dlgTextEdit(cmd);
+        dlgHBoxLayout {
+            dlgPushButton("+Execute") dlgAccept();
+            dlgPushButton("-Cancel") dlgReject();
+        }
+    };
+
+    // Execute script if it was accepted
+    if (!result)
+        exit(0);
+    else
+        exit(cmd);
+} else {
+    dlgMessageBox(":You must run this ULP in board !");
+    exit(1);
+}

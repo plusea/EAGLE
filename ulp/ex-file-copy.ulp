@@ -1,0 +1,30 @@
+#usage "<b>Example: Copy a file</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string fileName;
+string test = "";
+int Result = 0;
+int nBytes = 0;
+int start = 0;
+char c[];
+
+fileName = dlgFileOpen("Select a file", "*.*");
+
+nBytes = fileread(c, fileName);
+
+sprintf(test, "%d = &%x", nBytes, nBytes);
+dlgMessageBox("Length of File = " + test);
+
+dlgMessageBox("Write " + fileName + "?");
+fileName += ".copy";
+output(fileName, "wb") {
+  for (int z = 0; z < nBytes; z++) {
+    printf("%c", c[z]);
+    Result = z+1;
+    }
+  }
+sprintf(test, "%d = $%x", Result, Result);
+dlgMessageBox("Length of File = " + test, "OK");

@@ -1,0 +1,397 @@
+#usage "en: <qt><nobr><b>Find single-ended wires (wire stubs)</b>"
+       "<p>"
+       "Find single-ended wires that don't start or end at another wire, via or pad.<br>"
+       "Starting the ulp without parameter generates a list. "
+       "The temporary list (file) will be deleted as soon as you quit EAGLE.<br>"
+       "After running this ULP the MOVE command will be active. Now you should move this wire at a position where you can<br>"
+       "select it easily with the RIPUP command."
+       "</nobr>"
+       "RUN find-single-ended-wire [+] [-] [M] [=]"
+       "<table>"
+       "<tr><td>+</td> <td>shows the next entry of the list (trace).</td></tr>"
+       "<tr><td>-</td> <td>shows the previous entry of the list (trace)</td></tr>"
+       "<tr><td>=</td> <td>shows this message again</td></tr>"
+       "<tr><td>M</td> <td>defines a 0.1 micron group around this coordinate and activates the MOVE command</td></tr>"
+       "</table>"
+       "When using the parameters + and - for purposes of clarity only the <b>layer</b> that contains "
+       "the wire is displayed. Possibly plus the layer(s) <b>Pads</b> and/or <b>Vias</b>.<br>"
+       "For recognizing the wire stubs it is necessary to set the fill style of the respective layer "
+       "to <b>not filled</b> (dotted or hatched).<p>"
+       "<font color =\"red\"><b>NOTE: WIREs</b> or <b>VIAs</b> that end in a polygon's area, are recognized as <b>single-ended</b>!<br>"
+       "To avoid mistake use <b>RATSNEST</b> to calculate the polygons before. Now you can start the ULP!</font>"
+       "<p>"
+       "<author>Autor: support@cadsoft.de</author>"
+       ,
+       "de: <qt><nobr><b>Find single ended wire.</b>"
+       "<p>"
+       "Findet WIREs die nicht an einem Pad, Via oder einem anderen Wire beginnen bzw. enden (Stummel).<br>"
+       "Der Start des ULP ohne Parameter erzeugt eine Liste (Datei) der Wire, die zum einzeln durchschalten benutzt werden kann.<br>"
+       "Die Liste (Datei) wird nur temporär erzeugt und beim Beenden von Eagle gelöscht."
+       "</nobr>"
+       "RUN find-single-ended-wire [+] [-] [M] [=]"
+       "<table>"
+       "<tr><td>+</td> <td>zeigt den nächsten Eintrag in der Liste der gefundenen Elemente</td></tr>"
+       "<tr><td>-</td> <td>zeigt den vorhergehenden Eintrag in der Liste der gefundenen Elmente</td></tr>"
+       "<tr><td>=</td> <td>zeige den aktuellen Eintrag nochmal</td></tr>"
+       "<tr><td>M</td> <td>Definiert einen Bereich von 0.1 Mircon als Gruppe um die Koordinate und aktiviert den MOVE-Befehl</td></tr>"
+       "</table>"
+       "Nach dem Beenden des ULP ist der MOVE-Befehl aktiv. Damit kann der Wire zuerst aus dem "
+       "Bereich herausgezogen werden um ihn eindeutig mit dem RIPUP-Befehl zu selektieren.<br>"
+       "Um die Übersichtlichkeit zu erhöhen wird bei der Weiterschaltung mit + oder - nur der "
+       "<b>Layer</b> in dem sich der Wire-Stummel befindet, plus eventuell der <b>Pad</b>-Layer und/oder "
+       "<b>Via</b>-Layer eingeblendet.<br>"
+       "Um die Wire-Stummel innerhalb eines Pad oder Via zu erkennen ist es nötig das Füllmuster der "
+       "entsprechenden Layer auf <b>nicht füllend</b> (gepunktet oder schraffiert) einzustellen.<p>"
+       "<font color =\"red\"><b>ACHTUNG: WIREs</b> oder <b>VIAs</b>, die in einer Polygonfläche enden, werden ebenfalls als <b>Single-Ended</b> erkannt!<br>"
+       "Um Verwechslungen auszuschliessen lassen Sie mit <b>RATSNEST</b> zuerst die Polygonflächen berechnen und starten dann das ULP!</font>"
+       "<p>"
+       "<author>Autor: support@cadsoft.de</author>"
+
+string Version = "1.01"; // 2007-04-03 alf@cadsoft.de
+                         // 2008-04-10 changed GROUP ... (>x y); alf@cadsoft.de
+
+#require 4.1600;
+
+
+int test = 0;
+
+enum             { typeW, typeS,  typeP, typeV };
+string Typ[]   = { "Wire", "Smd", "Pad", "Via" };
+int    sameL[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int    sameS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int    padL[]  = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int    viaL[]  = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int    viaStackS[] = {
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                 };
+int    viaStackE[] = {
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                 };
+
+int ncoord = 0;
+int    wx[];  // X coordinate
+int    wy[];  // Y coordinate
+int    wl[];  // Layer
+int    ws[];  // Start Layer for Via & Pad, Smd and Wire
+int    we[];  // End   Layer for Via & Pad, Smd and Wire == Start Layer
+int    wt[];  // Type
+int index[];
+
+string cmd, s;
+
+string h;
+string file, memory;
+string cmdr[];
+
+
+// ### ---------------- functions ------------------- ###
+void set_layer(int lay, int s_lay, int e_lay, int type) {
+  switch(type)  {
+     case typeW : // Wire
+                  sameL[lay]++;
+                  break;
+     case typeS : // Smd
+                  sameL[lay]++;
+                  sameS[lay]++;
+                  break;
+
+     case typeP : // Pad
+                  for (int pl = 1; pl < 18; pl++) {
+                    padL[pl]++;
+                  }
+                  sameL[17]++;
+                  break;
+     case typeV : // Via
+                  for (int vl = s_lay; vl <= e_lay; vl++) {
+                    viaL[vl]++;
+                  }
+                  viaStackS[viaL[18]] = s_lay;
+                  viaStackE[viaL[18]] = e_lay;
+                  viaL[18]++;
+                  break;
+  }
+  return;
+}
+
+
+// ### claer counter ###
+void clear_same_counter(void) {
+  for (int n = 0; n < 19; n++) {
+    viaL[n]  = 0;
+    padL[n]  = 0;
+    sameS[n] = 0;
+    sameL[n] = 0;
+    viaStackS[n] = 0;
+    viaStackE[n] = 0;
+  }
+  return;
+}
+
+
+// #*#*#* check via stack and if via routet on more as 1 layer *#*#*#
+void check_via(int k, string sigName) {
+  int cntViaOverLap[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  string usedWireLayer = "";
+  int nV = 0;
+  for (nV = 0; nV < viaL[18]; nV++) {         // ### Via Stack
+    usedWireLayer = "";
+    int wire_on_stack_via = 0;
+    for (int n = viaStackS[nV]; n <= viaStackE[nV]; n++) {
+      cntViaOverLap[n]++;
+      if (sameL[n]) {
+        sprintf(s, " %d", n);
+        usedWireLayer += s;
+        wire_on_stack_via++;
+      }
+    }
+    if (wire_on_stack_via < 2) {
+      if (!wire_on_stack_via) {
+        if (language() == "de") sprintf(s, "WINDOW (%.4f %.4f);\t %d %d 18\t<nobr>Nur VIA von Layer %d - %d, Signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                viaStackS[nV], viaStackE[nV],
+                                                viaStackS[nV], viaStackE[nV],
+                                                sigName
+                                     );
+
+        else  sprintf(s, "WINDOW (%.4f %.4f);\t %d %d 18\t<nobr>Only VIA from layer %d - %d, signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                viaStackS[nV], viaStackE[nV],
+                                                viaStackS[nV], viaStackE[nV],
+                                                sigName
+                                     );
+      }
+      else {
+        if (language() == "de") sprintf(s, "WINDOW (%.4f %.4f);\t %s 18\t<nobr>Zu wenig WIRE: Nur in Layer %s an VIA von Layer %d - %d geroutet, Signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                usedWireLayer,
+                                                usedWireLayer,
+                                                viaStackS[nV], viaStackE[nV],
+                                                sigName
+                                     );
+
+        else  sprintf(s, "WINDOW (%.4f %.4f);\t %s 18\t<nobr>Only WIRE on layer %s on VIA from layer %d - %d, signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                usedWireLayer,
+                                                usedWireLayer,
+                                                viaStackS[nV], viaStackE[nV],
+                                                sigName
+                    );
+      }
+      cmd += s;
+    }
+  }
+  if (viaL[18]) {  // ### check via layer overlap ###
+    string ViaOverlap = "";
+    int cnt;
+    for (cnt = 1; cnt < 17; cnt++) {
+      if (cntViaOverLap[cnt] > 1) {
+        sprintf(s, " %d", cnt);
+        ViaOverlap += s;
+      }
+    }
+    if (ViaOverlap) {
+      if (language() == "de") sprintf(s, "WINDOW (%.4f %.4f);\t %s 18\t<nobr>VIAs Stack-Überlappung in Layer %s, Signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                ViaOverlap,
+                                                ViaOverlap,
+                                                sigName
+                                       );
+
+      else sprintf(s, "WINDOW (%.4f %.4f);\t %s 18\t<nobr>VIAs stack overlap on layer %s, signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                ViaOverlap,
+                                                ViaOverlap,
+                                                sigName
+                                       );
+      cmd += s;
+    }
+  }
+  return;
+}
+
+
+// ### check count of elements on coordinate ###
+void check_same(int k, string sigName) {
+  if (!sameL[17]) {    // ### Pads können kein Single-Ended-Wire sein ###
+    if (viaL[18]) {
+      check_via(k, sigName);
+    }
+    else {
+      for (int n = 1; n <= 16; n++) {
+        if (sameL[n]) {
+          if (sameL[n] + viaL[n] + sameS[n] < 2) {
+            if (language() == "de") sprintf(s, "WINDOW (%.4f %.4f);\t %d \t<nobr>Nur 1 WIRE im Layer %d von Signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                n, n, sigName);
+
+            else  sprintf(s, "WINDOW (%.4f %.4f);\t %d \t<nobr>Few WIRE on layer %d at signal <b>%s</b></nobr>\n",
+                                                u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                                n, n, sigName);
+            cmd += s;
+          }
+        }
+      }
+    }
+  }
+
+  if (padL[17] && viaL[18]) {
+      if (language() == "de") sprintf(s, "WINDOW (%.4f %.4f);\t %d %d 17 18\t<nobr>PAD und VIA an gleicher Koordinate, Signal <b>%s</b></nobr>\n",
+                                          u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                          ws[index[k]], we[index[k]],
+                                          sigName);
+      else sprintf(s, "WINDOW (%.4f %.4f);\t %d %d 17 18\t<nobr>PAD and VIA on same coordinate, signal <b>%s</b></nobr>\n",
+                                          u2mm(wx[index[k]]), u2mm(wy[index[k]]),
+                                          ws[index[k]], we[index[k]],
+                                          sigName);
+    cmd += s;
+  }
+  return;
+}
+
+
+
+// check multiple coordinates or one coordinate on this Signal
+void checkcoord(string sigName) {
+  int n = 0;
+  h = "";
+  sort(ncoord, index, wx, wy, wl, wt);  // in Order - Coordinates - Layer - Type
+  n = 0;
+  clear_same_counter();
+
+  if (ncoord > 1) {
+    // ### loop ###
+    do {
+      set_layer(wl[index[n]], ws[index[n]], we[index[n]], wt[index[n]]);
+      if (wx[index[n+1]] == wx[index[n]] && wy[index[n+1]] == wy[index[n]] ) {
+        n++;
+      }
+      else {
+        check_same(n, sigName);
+        clear_same_counter();
+        n++;
+      }
+    } while (n < ncoord);
+    check_same(n, sigName);
+  }
+  else  check_same(n, sigName);
+  return;
+}
+
+
+// collect coordinates
+void add(int x, int y, int lay, int l_start, int l_end, int type) {
+  wx[ncoord] = x;
+  wy[ncoord] = y;
+  wl[ncoord] = lay;
+  ws[ncoord] = l_start;
+  we[ncoord] = l_end;
+  wt[ncoord] = type;
+  ncoord++;
+  return;
+}
+
+
+// ### main ###
+if (board) {
+  board(B) {
+    string trace_file = filesetext(B.name, "~~.sew");   // single endet wire
+    string memory_file = filesetext(B.name, "~~.mlc");  // memory line counter
+
+    if (!argv[1]) {
+      dlgMessageBox(usage, "OK");
+      B.signals(S) {
+        status(" check "+S.name);
+        ncoord = 0;
+        S.wires(W) {
+          if (W.layer < 17) {
+            add(W.x1, W.y1, W.layer, W.layer, W.layer, typeW);
+            add(W.x2, W.y2, W.layer, W.layer, W.layer, typeW);
+          }
+        }
+        S.contactrefs(C) {
+          if (C.contact.smd) {
+            add(C.contact.x, C.contact.y, C.contact.smd.layer, C.contact.smd.layer, C.contact.smd.layer, typeS);
+          }
+          else {
+            add(C.contact.pad.x, C.contact.pad.y, 17, 1, 16, typeP);
+          }
+        }
+        S.vias(V) {
+          add(V.x, V.y, 18, V.start, V.end, typeV);
+        }
+        checkcoord(S.name);
+      }
+      output(trace_file, "wtD") printf("%s", cmd);
+      output(memory_file, "wtD") printf("-1");
+      exit("RUN '" + argv[0] + "' +\n");
+    }
+
+    // ### trace listed points by key "+" "-"
+    else {
+      string m_cmd[];
+      int n = fileread(m_cmd, memory_file);   // memory line counter
+      int cnt = strtol(m_cmd[0]);
+      string lines[];
+      n = fileread(lines, trace_file);   // single endet wire
+
+      if (!n) {
+        dlgMessageBox("No single ended WIRE found!", "OK");
+        exit(0);
+      }
+
+      else if (argv[1] == "+" || argv[1] == "-" || argv[1] == "=" || strupr(argv[1]) == "M") {
+        if (argv[1] == "+") {
+          if (cnt < n-1) cnt++;
+          else {
+            if (language() == "de")   dlgMessageBox("Letze Position!", "OK");
+            else   dlgMessageBox("The last position in list!", "OK");
+          }
+        }
+        else if (argv[1] == "-") {
+          if(cnt) cnt--;
+          else {
+            if (language() == "de") dlgMessageBox("Erste Position!", "OK");
+            else dlgMessageBox("The first position in list!", "OK");
+          }
+        }
+        else if (strupr(argv[1]) == "M") {
+          n = strsplit(cmdr, lines[cnt], '(');
+          string Display = "";
+          n = strsplit(m_cmd, cmdr[1], ')');
+          n = strsplit(cmdr, m_cmd[0], ' ');
+          real x = strtod(cmdr[0]);
+          real y = strtod(cmdr[1]);
+          sprintf(Display, "GROUP (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (%.4f %.4f) (>%.4f %.4f);\nMOVE (>%.4f %.4f)",
+                             x-0.0001, y-0.0001,
+                             x+0.0001, y-0.0001,
+                             x+0.0001, y+0.0001,
+                             x-0.0001, y+0.0001,
+                             x-0.0001, y-0.0001,
+                             x, y
+                 );
+          exit(Display);
+        }
+        else if (argv[1] == "=");
+      }
+
+      else {
+        if (language() == "de")  dlgMessageBox("Unbekannter Parameter!", "OK");
+        else  dlgMessageBox("Unknown parameter!", "OK");
+        exit(0);
+      }
+
+      n = strsplit(cmdr, lines[cnt], '\t');
+      string Display = "";
+      if (m_cmd[1] != cmdr[1]) {
+        sprintf(Display, "DISPLAY NONE %s ;\n", cmdr[1]);
+      }
+      output(memory_file, "wtD") printf("%d\n%s", cnt, m_cmd[1]); // save the last pointer
+      exit("GRID mm;\n"+Display+cmdr[0]+"RUN ulpmessage '"+cmdr[2]+"';"+"MOVE");  // activate th move command
+    }
+  }
+}
+
+else {
+  if (language() == "de") dlgMessageBox("Starten Sie das ULP in einem Board", "OK");
+  else dlgMessageBox("Start this ULP in a Board", "OK");
+}

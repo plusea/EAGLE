@@ -1,0 +1,42 @@
+#usage "<b>Edit previous device description</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+string dev[];
+string edit = "";
+int    count = 0;
+int    n = 0;
+
+if (library) library(L) {
+  L.devicesets(D) {
+    count++;
+    dev[count] = D.name;
+    cmd += D.name + "\n";
+    }
+  }
+
+if (deviceset) deviceset(D) {
+     edit = D.name;
+     }
+
+for (n = 1; n < count; n++) {
+    if (edit == dev[n]) {
+      break;
+      }
+    }
+
+if (n > 1) {
+  cmd = "EDIT " + dev[n - 1] + ".dev; DESCRIPT\n" ;
+  // **************************************************
+  //  a ";" must not follow DESCRIPT
+  //  otherwise the description is overwritten
+  //  with an empty string
+  // **************************************************
+  }
+else
+  cmd = "EDIT " + dev[1] + ".dev; DESCRIPT\n" ;
+
+exit(cmd);

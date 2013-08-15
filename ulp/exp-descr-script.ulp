@@ -1,0 +1,105 @@
+#usage "<b>Export descriptions of devices and packages to a script</b>\n"
+       "<p>"
+       "Use this ULP to export the device and package descriptions "
+       "of a library to a file."
+       "<p>"
+       "You can then edit this file with a text editor and read back "
+       "changed descriptions with the SCRIPT command."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+string dev[];
+string descript[];
+string dest;
+int    count = 0;
+int    n = 0;
+
+// Find some path names ---------
+string ulp_path   = "";
+string eagle_path = ""; // certain only for EAGLE standard installation
+string scr_path   = ""; // certain only for EAGLE standard installation
+string direntry[];
+char   c = '/';
+int    dirnr, j;
+   int pos = strrchr(argv[0], c);
+   if (pos >= 0) {
+      ulp_path = strsub(argv[0], 0, pos + 1);
+      eagle_path = ulp_path;
+      eagle_path = strsub(eagle_path, 0, pos);
+      int pos = strrchr(eagle_path, c);
+      if (pos >= 0) {
+         eagle_path = strsub(eagle_path, 0, pos + 1);
+         dirnr = fileglob(direntry, eagle_path+"*");
+         scr_path = eagle_path;
+         for (j; j<= dirnr; j++) {
+             if (strrstr(direntry[j], "scr/") > 0) {
+                scr_path = direntry[j];
+                }
+             }
+         }
+      }
+//--------------------------------
+
+string replacenewline(string nl) {
+   string a[];
+   int n = strsplit(a, nl, '\n');
+   if (n > 0) {
+      nl = "";
+      for (int x = 0; x < n - 1; x++) {
+         nl += a[x] + "\\n";
+         }
+      nl += a[x];
+      }
+   return nl;
+   }
+
+   if (library) library(L) {
+     L.devicesets(D) {
+       count++;
+       dev[count] = D.name;
+       descript[count] = replacenewline(D.description);
+       string h = "";
+       sprintf(h, "EDIT %s.dev ;\nDESCRIPT '%s'\n", dev[count], descript[count]);
+       cmd += h;
+       }
+
+  L.packages(P) {
+    count++;
+    dev[count] = P.name;
+    descript[count] = replacenewline(P.description);
+
+    string h = "";
+
+    int l = strlen(dev[count]);
+    string s = strsub(dev[count], 0, 2);
+    string t = strsub(dev[count], 3, l);
+
+    sprintf(h, "EDIT %s.pac ;\nDESCRIPT '%s'\n", dev[count], descript[count]);
+    cmd += h;
+    }
+
+  cmd = "SET UNDO_LOG OFF;\n" + cmd + "SET UNDO_LOG ON;\n";
+
+  //  EditBox
+  dlgDialog("Descriptions") {
+     dlgTextEdit(cmd);
+     dlgHBoxLayout {
+        dlgPushButton("+Ok") dlgAccept();
+        dlgPushButton("-Cancel Changes") dlgReject();
+        }
+     };
+
+// define destination path name
+// for a fixed destination, delete next line, uncomment the one after
+// the next line and edit it
+  dest = dlgFileSave("Save Description File", scr_path+"descript.scr", "*.scr");
+//dest = "c:/eagle/scr/descript.scr";
+
+  if (dest == "") exit(0);
+  output(dest, "wt") {
+     printf(cmd);
+     }
+  }

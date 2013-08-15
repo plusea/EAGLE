@@ -1,0 +1,32 @@
+#usage "<b>Example: Export a script and execute it</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+string dev = "";
+
+cmd += "OPEN TEST.LBR;\n";
+cmd += "Edit testxx.pac;\n";
+cmd += "change Layer tPlace;\n";
+cmd += "Grid MIL ON;\n";
+cmd += "; WIRE 1 (-100 -100) (230 360);\n";
+cmd += "; WIRE 20 (-10 -50) (130 60);\n";
+cmd += "WIN FIT;\n;";
+
+string ulp_path;
+
+// ** always use '/' as path delimiter to keep ULPs platform independent **
+
+char bkslash = '/';
+int pos = strrchr(argv[0], bkslash);
+if (pos >= 0) {            // split path from filename
+   ulp_path = strsub(argv[0], 0, pos + 1);
+   }
+
+output(ulp_path + "v4test.scr", "wt") {
+   printf(cmd);
+}
+
+exit("; SCR '" + ulp_path + "v4test.scr';\n");

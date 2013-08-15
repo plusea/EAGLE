@@ -1,0 +1,285 @@
+#usage "<qt>This ULP changes the wire width of certain signals and do have "
+       "a wire width in between the minimum (minwidth) and maximum (maxwidth) values.<p>"
+       // "NameOff = 1 switches off the checking of net names.<p>"
+
+string hilfe =
+       "<qt>Dieses ULP ändert die Leiterbahnbreite abhaengig vom Signalnamen und "
+       "der vorgegebenen min. max. Breite.<p>";
+       //"! Mit NameOff kann die Netz-Namen-Ueberpruefung abgeschaltet werden.<p></qt>";
+
+//     "THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED.</qt>"
+
+// *  2005-03-02 alf@cadsoft.de
+//    2008-06-03 alf@cadsoft.de  display the same layers as in the beginning
+//    2010-04-30 alf@cadsoft.de  new button [Add all], [Del. All]
+
+string Version = "1.5.1"; // 2010-04-30 alf@cadsoft.de
+
+string help = usage;
+if (language() == "de") help = hilfe;
+
+
+int Gridval = 1;              // 1=mm 2=mil 3=inch    ***
+                              // choose the value for the units you're working with
+string grid_unit;
+
+real changewidth =  0.3;     // gewuenschte Breite in ***
+                             // enter desired width here
+
+real minwidth    =  0.0;     // Auswahl-Min-Breite in ***
+                             // minimum width and
+real maxwidth    = 13.1;     // Auswahl-Max-Breite in ***
+                             // maximum width of tracks that will be taken into consideration.
+
+int NameOff = 0;       // 0 = Breite abhaengig vom Netznamen aendern
+                       // 0 = change width by name
+                       // 1 = Breite unabhaengig vom Netznamen aendern
+                       // 1 = change width without name
+
+string signals[]   = { "" };
+int    s = 0;
+string chsignals[] = { "" };
+int    chngsig     = 0;
+int    lastSigCh   = 0;
+int decs;
+
+string list;
+
+string grid[]         = { "MIC",  "MM", "MIL", "INCH" };
+real   maxwidthUnit[] = { 13100.0, 13.1, 516.0, 0.516 };
+
+
+int index[];
+int x1[], y1[], x2[], y2[], layer[];
+int usedlayer[];
+int n = 1;
+
+int    lVisible[];  // 2008-06-03 alf@cadsoft.de
+
+
+int found(string fnam) {
+  int fnd = 0;
+  do {
+    if (chsignals[fnd] == fnam) {
+      return 1;
+      break;
+    }
+    ++fnd;
+  } while (chsignals[fnd]);
+  return 0;
+}
+
+
+real fwidth(real ww) {
+  if (ww <= maxwidth && ww >= minwidth) return 1;
+  return 0;
+}
+
+
+void disp(int l) {
+  printf("DISPLAY NONE %d ;\n", l);
+  return;
+}
+
+void clearlay() {
+  for (int ly = 0; ly <= 255; ly++) usedlayer[ly] = 0;
+  return;
+}
+
+
+void clearsig (int selct) {
+  for (int r = selct; r < lastSigCh; r++) {
+    chsignals[r] = chsignals[r + 1];
+  }
+  chsignals[r + 1] = "";
+  if (lastSigCh) lastSigCh--;
+  return;
+}
+
+
+void AddAll (void) {
+  for (int r = 0; r < s; r++) {
+    chsignals[r] = signals[r];
+  }
+  chsignals[r] = "";
+  lastSigCh = r;
+  return;
+}
+
+
+void DelAll (void) {
+  lastSigCh = 0;
+  chsignals[lastSigCh] = "";
+  return;
+}
+
+
+
+void AddList (string SigName) {
+  int found = 0;
+  for (int r = 0; r < lastSigCh; r++) {
+    if (chsignals[r] == SigName) {
+      found = 1;
+      break;
+    }
+  }
+  if (!found) {
+    chsignals[r] = SigName;
+    lastSigCh++;
+  }
+  return;
+}
+
+
+void menue() {
+  int cs;
+  int l;
+  int Result = dlgDialog("Change wire with") {
+    string slist[];
+    dlgLabel(help);
+    // dlgSpacing(5);
+    dlgGridLayout {
+      dlgCell (0, 1) dlgSpacing(200);
+      dlgCell (0, 5) dlgSpacing(200);
+      dlgCell (1, 1) dlgLabel("&Signal list");
+      dlgCell (2, 1) dlgComboBox(signals, chngsig);
+      dlgCell (2, 3) dlgPushButton("&Add -->>")     AddList(signals[chngsig]);
+      dlgCell (3, 3) dlgPushButton("&Add all -->>") AddAll();
+      dlgCell (1, 5) dlgLabel("Signals &to change");
+      dlgCell (2, 5) dlgComboBox(chsignals, decs);
+      dlgCell (2, 6) dlgPushButton("&Delete")   clearsig(decs);
+      dlgCell (3, 6) dlgPushButton("Del. all")  DelAll();
+    }
+
+    dlgStretch(1);
+    dlgCheckBox("&Change without Signal name", NameOff);
+
+    dlgHBoxLayout {
+      dlgGroup("between wire width : " + grid_unit) {
+        dlgHBoxLayout {
+          dlgLabel("Mi&n. "); dlgRealEdit(minwidth, 0.0, maxwidthUnit[Gridval]);
+          dlgLabel(" Ma&x. "); dlgRealEdit(maxwidth, minwidth, maxwidthUnit[Gridval]);
+        }
+      }
+      dlgLabel(" new wire &width ");
+      dlgRealEdit(changewidth);
+      dlgStretch(1);
+    }
+
+    dlgHBoxLayout {
+      dlgPushButton("&OK") dlgAccept();
+      dlgSpacing(20);
+      dlgPushButton("-Cancel") dlgReject();
+      dlgStretch(1);
+      dlgLabel(Version);
+    }
+    dlgStretch(0);
+  };
+  if (Result == 0) exit (0);
+  return;
+}
+
+
+if (board) board(B) {
+  B.layers(L) {
+    lVisible[L.number] = L.visible;
+  }
+  B.signals(S) {
+    signals[s] = S.name;
+    s++;
+  }
+  Gridval = B.grid.unit;
+  grid_unit = "Unit " + grid[Gridval];
+  maxwidth = maxwidthUnit[Gridval];
+  menue();
+
+  clearlay();
+  string file = filesetext(B.name, "chnwidth.scr");
+  output (file, "wtD") {
+    printf("# %s\n", Version);
+    printf("# %s\n\n", EAGLE_SIGNATURE);
+    printf("# exported from %s\n# at %s\n\n", B.name, t2string(time()) );
+    printf("# This Script changed Wire Width between %.3f %s and %.3f %s to %.3f %s\n",
+                   minwidth, grid[Gridval], maxwidth, grid[Gridval], changewidth, grid[Gridval]);
+
+    printf("GRID %s FINEST;\n", grid[Gridval]);
+
+    B.signals(S) {
+      if (found(S.name) || NameOff) {
+        real Wwidth;
+
+        S.wires(W) {
+          switch (Gridval) {
+            case 0: Wwidth = u2mic(W.width);
+                    break;
+
+            case 1: Wwidth = u2mm(W.width);
+                    break;
+
+            case 2: Wwidth = u2mil(W.width);
+                    break;
+
+            case 3: Wwidth = u2inch(W.width);
+                    break;
+          }
+
+          if(fwidth(Wwidth)) {
+            x1[n] = W.x1;
+            y1[n] = W.y1;
+            x2[n] = W.x2;
+            y2[n] = W.y2;
+            layer[n] = W.layer;
+            ++n;
+          }
+        }
+      }
+    }
+
+    sort(n, index, layer);
+    int dl = 0;
+    for (int i = 1; i < n; ++i) {
+      if(dl != layer[index[i]]) {
+        dl = layer[index[i]];
+        disp(dl);
+        usedlayer[dl] = 1;
+      }
+      switch (Gridval) {
+        case 0: printf("CHANGE WIDTH %.3f (%.3f %.3f);\n",
+                changewidth, (u2mic(x1[index[i]]) + u2mic(x2[index[i]])) / 2,
+                             (u2mic(y1[index[i]]) + u2mic(y2[index[i]])) / 2 );
+                break;
+
+        case 1: printf("CHANGE WIDTH %.3f (%.3f %.3f);\n",
+                changewidth, (u2mm(x1[index[i]]) + u2mm(x2[index[i]])) / 2,
+                             (u2mm(y1[index[i]]) + u2mm(y2[index[i]])) / 2 );
+                break;
+
+        case 2: printf("CHANGE WIDTH %.3f (%.3f %.3f);\n",
+                changewidth, (u2mil(x1[index[i]]) + u2mil(x2[index[i]])) / 2,
+                             (u2mil(y1[index[i]]) + u2mil(y2[index[i]])) / 2 );
+                break;
+
+        case 3: printf("CHANGE WIDTH %.3f (%.3f %.3f);\n",
+                changewidth, (u2inch(x1[index[i]]) + u2inch(x2[index[i]])) / 2,
+                             (u2inch(y1[index[i]]) + u2inch(y2[index[i]])) / 2 );
+                break;
+      }
+    }
+    printf(";\n");
+    printf("DISPLAY NONE ");
+    for(int l = 1; l < 90; l++) {
+      if (lVisible[l]) {
+         printf(" %d", l);
+       }
+    }
+    for(l = 100; l < 256; l++) {
+      if (lVisible[l]) {
+        printf(" %d", l);
+      }
+    }
+    printf(";\nSET DISPLAY_MODE REAL;\nGRID LAST;\n");
+  }
+  exit ("SCRIPT '" + file + "';");
+}
+else dlgMessageBox("start this ULP in Board", "OK");
+

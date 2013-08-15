@@ -1,0 +1,11 @@
+#usage "update current libary with reference package library<p>"
+       "alf@cadsoft.de"
+
+string referencepackage = "plcc-socket.lbr";
+string cmd = "";
+
+library(L) {
+  if (filename(L.name) == referencepackage);
+  else sprintf(cmd, "UPDATE %s;\nWRITE;\n", referencepackage);
+}
+exit(cmd);

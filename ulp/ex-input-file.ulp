@@ -1,0 +1,75 @@
+#usage "<b>Example: Input file dialog</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd = "";
+int n = 0;        // global counter
+char b[];
+string fileName = "";
+
+fileName = dlgFileOpen("Select a File", "");
+int nBytes = fileread(b, fileName);
+
+  for (n; n < nBytes; n++) {
+     switch (b[n]) {
+         case    0:  break;
+
+         case    1:  cmd += "Device\n";
+                     break;
+
+         case    2:  cmd += "\nEND - HEADER\n";
+                     break;
+
+         case    3:  cmd += "\nEND - 3\n";
+                     break;
+
+         case    4:  cmd += "4";
+                     break;
+
+         case    5:  break;
+
+         case    6:  break;
+
+         case    7:  break;
+
+         case    8:  break;
+
+         case    9:  cmd += "<tab>\t";
+                     break;
+
+
+         case   10:  cmd += "Line Feed\n";
+                     break;
+
+         case   12:  cmd += "\nNew Page\n";
+                     break;
+
+         case   13:  cmd += "Carriage Return\n";
+                     break;
+
+         case   27:  cmd += "\nEscape\n";
+                     break;
+
+         case   32:  cmd += ".space." + b[n];
+                     break;
+
+         default:    cmd += b[n];
+                     break;
+         }
+      }
+   // Demo Text Editor Box
+   dlgDialog("Text Editor Box") {
+      dlgTextEdit(cmd);
+      dlgHBoxLayout {
+         dlgPushButton("+Ok") {
+            dlgAccept();
+            output("test.txt", "wt") {
+               printf(cmd);
+               }
+            };
+         dlgPushButton("-Cancel") dlgReject();
+         }
+      };
+   exit(0);

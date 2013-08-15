@@ -1,0 +1,501 @@
+#require 5.0902
+
+#usage "en: <b>Farnell DesignLink Interface</b>\n"
+           "<p>"
+           "Provides access to Farnell's online product database."
+           "<p>"
+           "Enter some keywords and press the <i>Search</i> button."
+           "<p>"
+           "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string Language = language();
+string Country = country();
+
+if (Country == "GB") {
+   // According to ISO 3166 (http://www.iso.org/iso/english_country_names_and_code_elements)
+   // there is no "en_UK". Computers that use "English/Great Britain" have "en_GB".
+   // We set Country to the fake value of "UK" to work around this misconception in DesignLink:
+   Country = "UK";
+   }
+
+int EndLimit = 1000000;
+int Debug = 0;
+
+string CustomerID = cfgget("ULP:designlink.CustomerID"),
+       CustomerPW = cfgget("ULP:designlink.CustomerPW");
+int InStock = cfgget("ULP:designlink.InStock") == "1";
+int RoHS    = cfgget("ULP:designlink.RoHS")    == "1";
+int ResultsPerPage = strtol(cfgget("ULP:designlink.ResultsPerPage"));
+string Currency;
+string CountryURL;
+
+int GetCustomerDetails(void)
+{
+  return dlgDialog("Customer Details") {
+     string id = CustomerID,
+            pw = CustomerPW;
+     dlgLabel("Access to the DesignLink server is limited to registered users.");
+     dlgLabel("Visit <a href=\"http://www.element-14.com/DesignLink\">http://www.element-14.com/DesignLink</a> to get your credentials.");
+     dlgGridLayout {
+        dlgCell(0, 0) dlgLabel("&Customer ID");
+        dlgCell(0, 1) dlgStringEdit(id);
+        dlgCell(1, 0) dlgLabel("&Password");
+        dlgCell(1, 1) dlgStringEdit(pw);
+        }
+     dlgHBoxLayout {
+        dlgStretch(9);
+        dlgPushButton("+Ok")   {
+           CustomerID = id;
+           CustomerPW = pw;
+           cfgset("ULP:designlink.CustomerID", id);
+           cfgset("ULP:designlink.CustomerPW", pw);
+           dlgAccept();
+           }
+        dlgPushButton("-Cancel") dlgReject();
+        };
+     };
+}
+
+if (!CustomerID && !GetCustomerDetails())
+   exit(EXIT_FAILURE);
+
+void InitCountryData(void)
+{
+  string CountryData[] = {
+   "DE EUR 0",
+   "AT EUR 0",
+   "CH CHF 0",
+   "UK GBP 0", // actually this should be GB, see above
+   "BE EUR 0",
+   "FI EUR 0",
+   "FR EUR 0",
+   "NL EUR 0",
+   "NO EUR 0",
+   "SE SEK 0",
+   "DK DKK 0",
+   "IL USD 0",
+   "IT EUR 0",
+   "ES EUR 0",
+   "AU AUD 0",
+   "NZ NZD 0",
+   "PT EUR 0",
+   "IE EUR 0",
+   "EX GBP 0",
+   "SI EUR 0",
+   "PL EUR 0",
+   "HU EUR 0",
+   "SK EUR 0",
+   "IN INR 0",
+   "BG EUR 0",
+   "RO EUR 0",
+   "CZ EUR 0",
+   "EE EUR 0",
+   "LV EUR 0",
+   "TR EUR 0",
+   "LT EUR 0",
+   "CN CNY 1",
+   "HK HKD 2",
+   "SG SGD 2",
+   "MY MYR 2",
+   "PH PHP 2",
+   "TH THB 2",
+   "CA USD 3",
+   "MX USD 3",
+   "US USD 3",
+   "AS USD 3",
+   "NS USD 3"
+   };
+
+  string URLs[] = {
+    "uk.farnell.com",
+    "cn.farnell.com",
+    "au.farnell.com",
+    "www.newark.com"
+    };
+
+  string rx = "^" + Country;
+  for (int i = 0; ; i++) {
+      string cd = CountryData[i];
+      if (!cd)
+         break;
+      if (strxstr(cd, rx) == 0) {
+         Currency = strsub(cd, 3, 3);
+         int u = strtol(strsub(cd, 7, 1));
+         CountryURL = URLs[u];
+         break;
+         }
+      }
+  if (!Currency || !CountryURL) {
+     string Msg;
+     sprintf(Msg, "Country '%s' not supported.", Country);
+     dlgMessageBox(Msg);
+     exit(1);
+     }
+}
+
+InitCountryData();
+
+string GetDesignLinkURL(void)
+{
+  return "https://" + CountryURL + "/pffind/services/SearchService";
+}
+
+string GetImageURL(string Image, int Large, string vrnt)
+{
+  return Image && vrnt ? "http://" + CountryURL + "/productimages/" + vrnt + (Large ? "standard" : "thumbnail") + Image
+                       : "";
+}
+
+string GetDataSheetURL(string Url)
+{
+  if (Url[0] == '/')
+     Url = "http://" + CountryURL + Url;
+  return Url;
+}
+
+string RecentSearch;
+string SearchResult;
+string ResultsPerPageValues[] = { "10", "25", "50" }; // Farnell's Design Link can't provide more than 50 items at a single blow
+int ResultsPerPageIndex = 0;
+int ResultOffset = 0;
+string ResultGroupArray[];
+int ResultGroupIndex = 0;
+string ResultTotal;
+
+int nProducts;
+string Products[];
+
+string Html = usage;
+numeric string ProductList[];
+int ProductSel = 0;
+
+string BoolString(int b)
+{
+  return b ? "true" : "false";
+}
+
+void Clear(void)
+{
+  nProducts = 0;
+  ProductList[nProducts] = "";
+  ProductSel = -1;
+}
+
+int Search(string Keyword)
+{
+  string StrRepl[] = { // string replacements
+     "&", "&amp;", // has to be the first one!
+     "<", "&lt;",
+     ">", "&gt;"
+     };
+  int o = 0;
+  for (int x = 0; StrRepl[x]; ) {
+      o = strstr(Keyword, StrRepl[x], o);
+      if (o >= 0) {
+         Keyword = strsub(Keyword, 0, o) + StrRepl[x + 1] + strsub(Keyword, o + strlen(StrRepl[x]));
+         o += strlen(StrRepl[x + 1]);
+         }
+      else {
+         x += 2;
+         o = 0;
+         }
+      }
+
+  {
+    string CurrentSearch;
+    sprintf(CurrentSearch, "%d%d_%d_%s\n", InStock, RoHS, ResultsPerPageIndex, Keyword);
+    if (RecentSearch != CurrentSearch) {
+       RecentSearch = CurrentSearch;
+       ResultGroupIndex = 0;
+       }
+  }
+
+  cfgset("ULP:designlink.InStock", InStock ? "1" : "0");
+  cfgset("ULP:designlink.RoHS",    RoHS    ? "1" : "0");
+  cfgset("ULP:designlink.ResultsPerPage",  ResultsPerPageValues[ResultsPerPageIndex]);
+
+  string Offset;
+  ResultsPerPage = strtol(ResultsPerPageValues[ResultsPerPageIndex]);
+  ResultOffset = ResultGroupIndex * ResultsPerPage;
+  sprintf(Offset, "%d", ResultGroupIndex * ResultsPerPage);
+
+  string TimeStamp = t2string(time(), "Uyyyy-MM-ddThh:mm:ss.000");
+  string Signature = fdlsignature("searchByKeyword" + TimeStamp, CustomerPW);
+  string Query = "<soapenv:Envelope  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"  xmlns:v1=\"http://pf.com/soa/services/v1\">\n"
+                 " <soapenv:Header>\n"
+                 "   <v1:userInfo>\n"
+                 "     <v1:signature>" + Signature + "</v1:signature>\n"
+                 "     <v1:timestamp>" + TimeStamp + "</v1:timestamp>\n"
+                 "     <v1:locale>" + Language + "_" + Country + "</v1:locale>\n"
+                 "   </v1:userInfo>\n"
+                 "   <v1:accountInfo>\n"
+                 "     <v1:customerId>" + CustomerID + "</v1:customerId>\n"
+                 "   </v1:accountInfo>\n"
+                 " </soapenv:Header>\n"
+                 " <soapenv:Body>\n"
+                 "   <v1:keywordParameter>\n"
+                 "     <v1:keyword>" + Keyword + "</v1:keyword>\n"
+                 "     <v1:offset>" + Offset + "</v1:offset>\n"
+                 "     <v1:numberOfResults>" + ResultsPerPageValues[ResultsPerPageIndex] + "</v1:numberOfResults>\n"
+                 "      <v1:RefinementParameters>\n"
+                 "        <v1:inStock>" + BoolString(InStock) + "</v1:inStock>\n"
+                 "        <v1:rohsComplaint>" + BoolString(RoHS) + "</v1:rohsComplaint>\n"
+                 "      </v1:RefinementParameters>\n"
+                 "    </v1:keywordParameter>\n"
+                 "  </soapenv:Body>\n"
+                 "</soapenv:Envelope>\n";
+
+  Html = "Searching ...";
+  dlgRedisplay();
+  if (Debug) {
+     if (dlgMessageBox("Connect DL at\n  " + GetDesignLinkURL() + "\nwith:\n" + Query, "Ok", "-Cancel") == 1)
+        exit(1);
+     output("fdlQuery.html", "wb") { printf("%s", Query); }
+     }
+
+  int rv = netpost(SearchResult, GetDesignLinkURL(), Query);
+  if (rv >= 0) { // NoError
+     if (Debug)
+        output("fdlResponse.html", "wb") { printf("%s", SearchResult); }
+     }
+  else {
+     string FaultString = xmltext(SearchResult, "soapenv:Envelope/soapenv:Body/soapenv:Fault/faultstring");
+     if (FaultString)
+        SearchResult = FaultString;
+     sprintf(Html, "Error while accessing '%s':\n\n%s\n\n%s", GetDesignLinkURL(), neterror(), SearchResult);
+     SearchResult = "";
+     return 0;
+     }
+  return 1;
+}
+
+void Result2List(void)
+{
+  if (strlen(SearchResult) <= 1)
+     return;
+  nProducts = xmlelements(Products, SearchResult, "soapenv:Envelope/soapenv:Body/ns1:keywordSearchReturn/ns1:products");
+  ProductList[nProducts] = "";
+  for (int i = nProducts; --i >= 0; ) {
+      string Prices[];
+      int nPrices = xmlelements(Prices, Products[i], "ns1:products/ns1:prices");
+      string Price;
+      for (int j = nPrices; --j >= 0; ) {
+          string p1 = xmltext(Prices[j], "ns1:prices/ns1:cost");
+          if (p1 && (!Price || strtod(p1) < strtod(Price)))
+             Price = p1;
+          }
+      ProductList[i] =
+          xmltext(Products[i], "ns1:products/ns1:sku")
+        + "\t"
+        + xmltext(Products[i], "ns1:products/ns1:vendorName")
+        + "\t"
+        + xmltext(Products[i], "ns1:products/ns1:translatedManufacturerPartNumber")
+        + "\t"
+        + xmltext(Products[i], "ns1:products/ns1:inv")
+        + "\t"
+        + Price
+        + "\t"
+        + xmltext(Products[i], "ns1:products/ns1:displayName")
+        ;
+      }
+
+  {
+    ResultTotal = xmltext(SearchResult, "soapenv:Envelope/soapenv:Body/ns1:keywordSearchReturn/ns1:numberOfResults");
+    int Total = strtol(ResultTotal);
+    for (int i = 0; ; ) {
+        int n1 = i * ResultsPerPage + 1,
+            n2 = n1 + ResultsPerPage - 1;
+        if (n2 > Total)
+           n2 = Total;
+        string s;
+        sprintf(s, "%d - %d of %d", n1, n2, Total);
+        if (Total)
+           ResultGroupArray[i++] = s;
+//        if (n2 == Total) {
+        if (n2 == Total || n2 >= 500) {  // there are problems at Farnell's Design Link with offsets above 500
+           ResultGroupArray[i] = "";
+           break;
+           }
+        }
+  }
+
+  ProductSel = -2; // the first item after sort
+}
+
+void ShowSelection(void)
+{
+  if (!nProducts) {
+     Html = "No search results available.";
+     return;
+     }
+  if (ProductSel < 0)
+     return;
+  string p = Products[ProductSel];
+  if (p) {
+     string Attributes[];
+     int nAttributes = xmlelements(Attributes, p, "ns1:products/ns1:attributes");
+     string AttributeList;
+     for (int i = 0; i < nAttributes; ++i)
+         AttributeList += "    <li> " + xmltext(Attributes[i], "ns1:attributes/ns1:attributeLabel")
+                               + ": " + xmltext(Attributes[i], "ns1:attributes/ns1:attributeValue")
+                                      + xmltext(Attributes[i], "ns1:attributes/ns1:attributeUnit")
+                                      + "</li>\n";
+     string PricesList;
+     {
+       string Prices[];
+       int nPrices = xmlelements(Prices, p, "ns1:products/ns1:prices");
+       for (int j = 0; j < nPrices; ++j) {
+           string Cost = xmltext(Prices[j], "ns1:prices/ns1:cost");
+           if (Cost) {
+              string n1 = xmltext(Prices[j], "ns1:prices/ns1:from"),
+                     n2 = xmltext(Prices[j], "ns1:prices/ns1:to");
+              if (strtol(n2) >= EndLimit)
+                 n2 = "+";
+              else
+                 n2 = "&nbsp;-&nbsp;" + n2 + "&nbsp;";
+              PricesList += "       <tr>\n"
+                            "        <td>" + n1 + n2 + "</td>\n"
+                            "        <td>" + Cost + "</td>\n"
+                            "       </tr>\n";
+              }
+           }
+     }
+     Html =   "<style type=\"text/css\">\n"
+              " .tableblock {\n"
+              "     background-color: #A0A0A0;\n"
+              " }\n"
+              " .tabledata {\n"
+              "     background-color: #F0F0F0;\n"
+              "     padding: 2;\n"
+              " }\n"
+              "</style>\n"
+              ;
+
+     Html +=  "<h2>" + xmltext(p, "ns1:products/ns1:displayName") + "</h2>";
+     string ImageUrl = GetImageURL(xmltext(p, "ns1:products/ns1:image/ns1:baseName"), 1, xmltext(p, "ns1:products/ns1:image/ns1:vrntPath")),
+            DataSheet = xmlelement(p, "ns1:products/ns1:datasheets");
+     Html +=  "<table>\n"
+              " <tr>\n"
+              "  <td>\n";
+     if (ImageUrl)
+        Html +=
+              "   <img src=\"" + ImageUrl + "\">\n";
+     if (DataSheet)
+        Html +=
+              "   <p>\n"
+              "    <a href=\"" + GetDataSheetURL(xmltext(DataSheet, "ns1:datasheets/ns1:url")) + "\">\n"
+              "    " + xmltext(DataSheet, "ns1:datasheets/ns1:description") + "</a>\n"
+              "   </p>\n";
+     Html +=  "  </td>\n"
+              "  <td>\n"
+              "   <dl>\n"
+              "    <dt>Manufacturer:</dt>\n"
+              "    <dd style=\"text-align: left;\">" + xmltext(p, "ns1:products/ns1:vendorName") + "</dd>\n"
+              "    <dt>Order Code:</dt>\n"
+              "    <dd>" + xmltext(p, "ns1:products/ns1:sku") + "</dd>\n"
+              "    <dt>Manufacturer Part No:</dt>\n"
+              "    <dd>" + xmltext(p, "ns1:products/ns1:translatedManufacturerPartNumber") + "</dd>\n"
+              "   </dl>\n"
+              "   <p>RoHS: <strong>  "  + xmltext(p, "ns1:products/ns1:rohsStatusCode") + "</strong></p>\n"
+              "   <dl>\n"
+              "    <dt>Description</dt>\n"
+              "   </dl>\n"
+              "   <ul>\n"
+              "    <li>" + xmltext(p, "ns1:products/ns1:displayName") + "</li>\n"
+                   + AttributeList +
+              "   </ul>\n"
+              "  </td>\n"
+              "  <td>\n"
+              "   <table class=\"tableblock\">\n"
+              "    <tr>\n"
+              "     <td class=\"tabledata\">\n"
+              "      <h4>Availability</h4>\n"
+              "      <table width=\"100\%\" style=\"background:#FFFFFF\">\n"
+              "       <tr>\n"
+              "        <td>\n"
+              "         <p>\n"
+              "          <b>Availability</b>: " + xmltext(p, "ns1:products/ns1:inv") + "<br>\n"
+              "         </p>\n"
+              "         <p>\n"
+              "          <b>Price For:</b> " + xmltext(p, "ns1:products/ns1:packSize") + " " + xmltext(p, "ns1:products/ns1:unitOfMeasure") +
+              "         </p>\n"
+              "         <p>\n"
+              "          <b>Minimum Order Quantity:</b> " + xmltext(p, "ns1:products/ns1:translatedMinimumOrderQuality") +
+              "         </p>\n"
+              "         <p>\n"
+              "          <b>Order Multiple:</b> " + xmltext(p, "ns1:products/ns1:translatedMinimumOrderQuality") +
+              "         </p>\n"
+              "        </td>\n"
+              "       </tr>\n"
+              "      </table>\n"
+              "     </td>\n"
+              "    </tr>\n"
+              "    <tr>\n"
+              "     <td class=\"tabledata\">\n"
+              "      <h4>Price (" + Currency + ")</h4>\n"
+              "      <table width=\"100\%\" style=\"background:#FFFFFF\">\n"
+              "       <tr>\n"
+              "        <th width=\"44\%\">Qty</th>\n"
+              "        <th>List Price</th>\n"
+              "       </tr>\n"
+                      + PricesList +
+              "      </table>\n"
+              "     </td>\n"
+              "    </tr>\n"
+              "   </table>\n"
+              "  </td>\n"
+              " </tr>\n"
+              "</table>\n";
+     }
+}
+
+string Keyword;
+
+void DoSearch(void)
+{
+  if (Search(Keyword)) {
+     Result2List();
+     ShowSelection();
+     }
+}
+
+if (ResultsPerPage)
+   while (ResultsPerPage > strtol(ResultsPerPageValues[ResultsPerPageIndex]))
+         if (!ResultsPerPageValues[++ResultsPerPageIndex]) {
+            --ResultsPerPageIndex;
+            break;
+            }
+
+dlgDialog("Farnell DesignLink Interface") {
+   dlgVBoxLayout {
+      dlgHBoxLayout
+         dlgSpacing(800);
+      dlgHBoxLayout {
+         dlgTextView(Html);
+         dlgVBoxLayout dlgSpacing(400);
+         }
+      dlgListView("Order Code\tManuf.\tManuf. Code\tAvail.\tPrice (from)\tDescription", ProductList, ProductSel)
+         if (dlgSelectionChanged())
+            ShowSelection();
+      dlgHBoxLayout {
+         dlgCheckBox("In stock", InStock);
+         dlgCheckBox("RoHS", RoHS);
+         dlgStretch(3);
+         dlgLabel("Results per page");
+         dlgComboBox(ResultsPerPageValues, ResultsPerPageIndex);
+         dlgStretch(1);
+         dlgComboBox(ResultGroupArray, ResultGroupIndex) DoSearch();
+         }
+      dlgHBoxLayout {
+         dlgStringEdit(Keyword);
+         dlgPushButton("+Search") {
+            Clear();
+            DoSearch();
+            }
+         dlgPushButton("Config") GetCustomerDetails();
+         dlgPushButton("Close") dlgReject();
+         }
+      }
+   };

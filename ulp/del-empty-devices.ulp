@@ -1,0 +1,50 @@
+#usage "<b>Delete empty devices</b>\n"
+       "<p>"
+       "To delete devices without a symbol from a library, "
+       "run this ULP and click EXECUTE."
+       "<p>"
+       "Before executing the DELETE commands you can edit them "
+       "in the appearing editor window."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+if (library) {
+int empty;
+string cmd = "", h;
+
+cmd += "set undo_log off;\n";
+library(L) {
+  L.devicesets(D) {
+    h = "";
+    empty = 1;
+    D.gates(G) {
+      empty = 0;
+      }
+    if (empty) { // device w/o gates found!
+      sprintf(h,"REMOVE %s.dev;\n",D.name);
+      cmd += h;
+      }
+    }
+  }
+cmd += "set undo_log on;\n";
+
+//  EditBox
+int Result = dlgDialog("Edit and Execute") {
+   dlgTextEdit(cmd);
+   dlgHBoxLayout {
+      dlgPushButton("+Execute") dlgAccept();
+      dlgPushButton("-Cancel") dlgReject();
+      }
+   };
+if (!Result)
+   exit(0);
+
+exit(cmd);
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Library    \n");
+   exit (0);
+}

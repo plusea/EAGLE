@@ -1,0 +1,255 @@
+#usage "<b>Import an EAGLE Netscript into a Schematic</b>\n"
+       "<p>"
+       "Opens a file dialog to select a netscript file. "
+       "Some PCB systems allow to export an EAGLE netscript file in order to make "
+       "a layout in EAGLE. This ULP allows to use the netscript to generate an "
+       "EAGLE schematic, too. At least it can be used to draw all net connections "
+       "in the schematic easily, provided all parts have been placed before. "
+       "<p>"
+       "<b>Attention:</b><br>"
+       "In special situations it could happen that importing a netlist "
+       "into a schematic (in form of 'airwires' as it happens here) "
+       "results in misconnections. This is the case if a net line "
+       "overlaps a pin connection point. If this certain pin under the "
+       "net should get connected later, EAGLE will connect to the net "
+       "instead of the pin under it.<p>"
+       "We want to avoid this problem in the ULP by drawing the net "
+       "line from the first pin with an offset of 50 mil. This way "
+       "diagonal net lines will be drawn and there will be hardly pins "
+       "that lie under net lines.<p>"
+       "If a net has to be drawn on a further sheet of the schematic "
+       "EAGLE uses the diagonal offset of 50 mil and places an "
+       "additional LABEL."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// 2006-01-26 -- modified #usage  -- ric
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+/* German info
+       "<b>ACHTUNG</b><p>\n"
+       "Das Einlesen einer Netzliste (Airwire) in den Schaltplan, "
+       "kann in besonderen Situationen zu falschen Verbindungen fuehren.<p>\n"
+       "Werden die Netze als "Luftlinien" zwischen den Bauteilpins gezeichnet, "
+       "so kann es vorkommen, dass eine Netzlinie Bauteilpins ueberlagert. "
+       "Wird spaeter <b>dieser</b> Pin unter der Linie an ein Netz angeschlossen "
+       "so nimmt EAGLE das Netz als Kontaktpunkt und nicht den "
+       "darunterliegenden Pin.<p>"
+       "In diesem ULP wird versucht diese Problematik zu umgehen, in dem vom "
+       "ersten Pin mit einem Offset (50mil) vom Pin weg "
+       "und dann zum zweiten Pin gezeichnet wird. Dadurch entstehen diagonale "
+       "Luftlinien die nur in seltenen Faellen einen Pin ueberlagern.<p>\n"
+       "Wird ein Netz auf einer anderen Schaltplanseite weitergefuehrt, "
+       "so wird vom Pin um 50 Mil diagonal weggezeichnet und zusaetzlich "
+       "ein <b>LABEL</b> plaziert.<p>\n"
+*/
+
+// Eagle NET-Command definition
+string net_name = strupr(argv[1]);
+string device_a = strupr(argv[2]);
+string pin_a    = strupr(argv[3]);
+string device_b = strupr(argv[4]);
+string pin_b    = strupr(argv[5]);
+
+string cmd = "";
+
+string lines[];
+int    nLines;
+string s;
+
+// *** Eagle NET-SCRIPT definition ***
+string tok_Signal = "Signal";
+string signalLines[];
+string signalName;
+int    signalCnt = 0;
+string tok_Change = "Change";
+
+// *** functions ***
+
+int actSheet(UL_SHEET S)
+{
+  return S.number;
+}
+
+void readNetList(void)
+{
+   int sn = 0;
+   do {
+      if( strstr(lines[sn], tok_Signal) == 0) {
+         signalCnt = strsplit (signalLines, lines[sn], '\'');
+         // init NET command
+         string netName = signalLines[1];
+         string dev_a = signalLines[3];
+         string pin_a = signalLines[5];
+         string dev_b = "";
+         string pin_b = "";
+         // start NET command with run-cmd-net.ulp
+         sn++;
+         while (strstr(lines[sn], ";") < 0) {  // end of Signallist
+            signalCnt = strsplit (signalLines, lines[sn], '\'');
+            string dev_b = signalLines[1];
+            string pin_b = signalLines[3];
+            cmd += "run " + argv[0] + " '" + netName + "' '" + dev_a + "' '" + pin_a + "' ";
+            cmd += "'" + dev_b + "' '" + pin_b + "' ;\n";
+            dev_a = dev_b;
+            pin_a = pin_b;
+            sn++;
+            }
+         }
+      if( strstr(lines[sn], tok_Change) == 0) {
+         sprintf(s, "%s\n", lines[sn]);
+         cmd += s;
+         }
+      sn++;
+      } while (lines[sn]);
+   return;
+}
+
+// *** MAIN ***
+if (schematic) {
+
+   // run as net command
+   if (device_b && pin_b) {
+
+      int pinA_sheet = 0;
+      int pinB_sheet = 0;
+      int xA, yA, xB, yB;
+      string g = ";\nGRID LAST;\n";
+      int actualsheet;
+      if (sheet) sheet(SH) actualsheet = SH.number;
+
+      // *** Schematic coord. ***
+      schematic(S) {
+         cmd = "SET WIRE_BEND 2;\nGRID MIL 50 2 ;\n";
+         S.sheets(SH) {
+            SH.parts(PA) {
+               if (PA.name == device_a ) {
+                  PA.instances(IN) {
+                     IN.gate.symbol.pins(P) {  // Pin
+                        if (P.contact) {
+                           string cp = P.contact.name;        // PAD name von Connect/Pad
+                           if (cp == pin_a) {
+                              xA = P.x;
+                              yA = P.y;
+                              pinA_sheet = SH.number;
+                              }
+                           }
+                        }
+                     }
+                  }
+               if (device_b) {
+                  if (PA.name == device_b ) {
+                     PA.instances(IN) {
+                        IN.gate.symbol.pins(P) {  // Pin
+                           if (P.contact) {
+                              string cp = P.contact.name;        // PAD name von Connect/Pad
+                              if (cp == pin_b) {
+                                 xB = P.x;
+                                 yB = P.y;
+                                 pinB_sheet = SH.number;
+                                 }
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      if (net_name) net_name = "'" + net_name + "'";
+         // place Name in ' ' for NET-Command
+
+      string s;
+      if ( (pinA_sheet != 0) && (pinB_sheet != 0) ) {
+         if (pinA_sheet == pinB_sheet) {
+            if (actualsheet != pinA_sheet) {
+               sprintf(s, "EDIT .s%d;\n", pinA_sheet);
+               cmd += s;
+               }
+            sprintf(s, "NET %s (%.3f %.3f)", net_name, u2mil(xA), u2mil(yA) );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f)", u2mil(xA)+50, u2mil(yA)-50 );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f);\n", u2mil(xB), u2mil(yB) );
+            cmd += s;
+            exit (cmd + g);
+            }
+         else {
+            if (actualsheet != pinA_sheet) {
+               sprintf(s, "EDIT .s%d;\n", pinA_sheet);
+               cmd += s;
+               }
+            sprintf(s, "NET %s (%.3f %.3f)", net_name, u2mil(xA), u2mil(yA) );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f);\n", u2mil(xA)+50, u2mil(yA)+50 );
+            cmd += s;
+            sprintf(s, "LABEL (%.3f %.3f)", u2mil(xA), u2mil(yA) );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f);\n", u2mil(xA)+50, u2mil(yA)+50 );
+            cmd += s;
+            sprintf(s, "CHANGE LAYER 91 (%.3f %.3f);\n", u2mil(xA)+50, u2mil(yA)+50 );
+            cmd += s;
+
+            if (actualsheet != pinB_sheet) {
+               sprintf(s, "EDIT .s%d;\n", pinB_sheet);
+               cmd += s;
+               }
+            sprintf(s, "NET %s (%.3f %.3f)", net_name, u2mil(xB), u2mil(yB) );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f);\n", u2mil(xB)+50, u2mil(yB)+50 );
+            cmd += s;
+            sprintf(s, "LABEL (%.3f %.3f)", u2mil(xB), u2mil(yB) );
+            cmd += s;
+            sprintf(s, " (%.3f %.3f);\n", u2mil(xB)+50, u2mil(yB)+50 );
+            cmd += s;
+            sprintf(s, "CHANGE LAYER 91 (%.3f %.3f);\n", u2mil(xB)+50, u2mil(yB)+50 );
+            cmd += s;
+            exit (cmd + g);
+            }
+         }
+      else {
+         cmd = "";
+         if (pinA_sheet == 0) cmd += "Device " + device_a + " Pin " + pin_a + "\n";
+         if (pinB_sheet == 0) cmd += "Device " + device_b + " Pin " + pin_b + "\n";
+         cmd += "not fond!";
+         dlgMessageBox(cmd, "OK");
+         exit (-1);
+         }
+      }
+
+   // run as script converter
+   else {
+      string ulp_path ;
+      char bkslash = '/';
+      int pos = strrchr(argv[0], bkslash);
+      if (pos >= 0) {
+         ulp_path = strsub(argv[0], 0, pos + 1);
+         }
+
+      // File handling
+      int n = 0;
+      string text;
+      string NetListfileName;
+      int nBytes;
+
+      if (argv[1]) {
+         NetListfileName = argv[1];
+         }
+      else {
+         NetListfileName = dlgFileOpen("Select Script File", "*.scr", "*.*");
+         }
+
+      if (NetListfileName) {
+         nLines = fileread(lines, NetListfileName);
+         readNetList();
+         }
+      output(NetListfileName + "x", "wt") printf("%s", cmd);
+
+      exit (cmd);
+      }
+   }
+else {
+   dlgMessageBox("Start this ULP from a schematic!", "OK");
+   exit (0);
+   }

@@ -1,0 +1,27 @@
+#usage "<b>run a SCRIPT through all libraries in a directory</b><p>\n"
+       "Load any library from the library directory and execute the SCRIPT.<p>"
+       "<author>Author: librarian@cadsoft.de</author><p><p>"
+
+string a[], cmd;
+
+
+//-------- main program --------------------------------------------------
+
+if  (library) {
+   library(L) {
+      string lbr_path = filedir(L.name);
+      string ScriptFile = dlgFileOpen("Select a SCRIPT to start in all LBRs", "", "*.scr");
+      if (!ScriptFile) exit(0);                   // 2006.02.20 librarian@cadsoft.de
+      int n = fileglob(a, lbr_path + "*.lbr");
+      if (n) {
+         for (int xl = 0; xl < n; xl++) {
+            string h;
+            sprintf(h, "OPEN '" + lbr_path + filename(a[xl]) + "';\nSCRIPT '" + ScriptFile + "';\n");
+            cmd += h;
+            }
+         }
+      }
+   exit (cmd);
+   }
+
+else dlgMessageBox("Start this ULP from a Library", "OK");

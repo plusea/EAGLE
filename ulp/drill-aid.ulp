@@ -1,0 +1,75 @@
+#usage "<b>Limit drill diameter of pads, vias and holes for easier manual drilling.</b>\n"
+       "<p>"
+       "Draws small circles in layer 116 inside the drilling of pads, vias and holes, "
+       "which should make it easier to center the tool while drilling the "
+       "board manually."
+       "<p>"
+       "Usage: RUN drill-aid [ <i>diameter</i> ]"
+       "<p> "
+       "Activate layer 116 in addition to the bottom side layers in the "
+       "CAM processor or use the DISPLAY command to activate it for printing."
+       "<p>"
+       "To delete the elements in layer 116 afterwards, display it without "
+       "any other layers, and use GROUP and DELETE. Then remove the whole "
+       "layer with the command LAYER -116."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+real drilcent = 0.3; // center drill diameter
+
+string cmd = "GRID mm;\nLayer 116 centerDrill;\nchange layer 116;\n";
+
+void  center(int x, int y, int drill) {
+   real width  = (u2mm(drill) - drilcent) / 2 + 0.05;  // overlap 0.05mm 2008-09-01 alf
+   real radius = width / 2 + (drilcent / 2);
+   if (radius < (drilcent / 2 + 0.025) ) return;
+   string h;
+   sprintf(h, "circle %.3f (%.3f %.3f) (%.3f %.3f) ;\n",
+                  width,
+                  u2mm(x), u2mm(y), u2mm(x) + radius, u2mm(y) );
+   cmd += h;
+   return;
+}
+
+if (board) board(B) {
+   if (argv[1]) drilcent = strtod(argv[1]);
+   else {
+      int Result = dlgDialog("Drill AID V2") {
+         dlgLabel(usage);
+         dlgLabel("&Drill center diameter mm");
+         dlgHBoxLayout {
+            dlgRealEdit(drilcent);
+            dlgStretch(1);
+            dlgPushButton("+OK") dlgAccept();
+            dlgStretch(1);
+            dlgPushButton("-&Cancel") dlgReject();
+            }
+         };
+      if (!Result) exit (0);
+      }
+
+   B.holes(L) {
+     center(L.x, L.y, L.drill);
+     }
+   B.elements(E) {
+     E.package.holes(H) {
+       center(H.x, H.y, H.drill);
+       }
+     E.package.contacts(C) {
+       if (C.pad) {
+          center(C.pad.x, C.pad.y, C.pad.drill);
+          }
+       }
+    }
+  B.signals(S) {
+    S.vias(V) {
+       center(V.x, V.y, V.drill);
+       }
+    }
+  exit (cmd);
+}
+
+else dlgMessageBox("Start this ULP in a Board!", "OK");
+exit (0);

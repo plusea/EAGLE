@@ -1,0 +1,18 @@
+<language en>
+<b>Project Folder</b>
+<p>
+This folder contains subfolders which contain all your projects.
+<p>
+Subfolders which contain an EAGLE project file (eagle.epf) have
+a red folder icon. Click on a project's marker here in the projects branch
+to open or close an existing project.
+</language>
+<language de>
+<b>Projekt-Verzeichnis</b>
+<p>
+Dieses Verzeichnis enthält Unterverzeichnisse, die Ihre Projekte enthalten.
+<p>
+Unterverzeichnisse, die eine EAGLE-Projekt-Datei (eagle.epf) enthalten, werden
+mit einem roten Icon markiert. Klicken Sie auf den Marker eines Projekts hier
+im Projects-Zweig, öffnen bzw. schließen Sie ein bestehendes Projekt.
+</language>

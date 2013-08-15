@@ -1,0 +1,15 @@
+# Delete all signals in the layout
+#
+# This script is written for EAGLE 5 and removes all traces and airwires in the layout.
+# This script replaces the former DELETE SIGNALS command.
+
+DISPLAY = _current_layers_ @;
+DISPLAY ALL;
+RIPUP;
+DISPLAY NONE 19;
+GRID INCH;
+GROUP (-32 -32) (-32 32) (32 32) (32 -32);
+DELETE (>0 0);
+GRID LAST;
+DISPLAY _current_layers_;
+DISPLAY = _current_layers_;

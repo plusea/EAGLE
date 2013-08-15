@@ -1,0 +1,10 @@
+# Changes the Fill Style
+#
+# The fill style for Top and Bottom layer will be switched to 'empty'.
+# Use fill.scr to undo this action.
+
+Set Fill_Layer Top Empty;
+Set Fill_Layer Bottom Empty;
+Set Fill_Layer tPlace Empty;
+Set Fill_Layer bPlace Empty;
+Set Display_Mode NoDrill;

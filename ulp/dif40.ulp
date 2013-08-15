@@ -1,0 +1,441 @@
+#usage "<b>Export DIF 4.0 format</b><p>"
+       "This format is used for production and test purposes. It has been defined by Digitaltest GmbH.<p>"
+       "Run the ULP from the board editor and get the file <i>boardname.dif</i>.<p>"
+       "Please have a look at the \"user definable parameters\" section of the program."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+
+// 2005-02-28: Corrected output for mirrored components
+//             Added "File Save" dialog
+//             by support@cadsoft.de
+// 2005-11-09: Corrected Y Coordinate, was always minus
+// 2008-05-27: Corrected relativ coordinates if package rotate in 0.1 degree
+//             by alf@cadsoft.de
+
+
+string REVISION = "2.00";
+
+////////////////// user definable parameters ////////////////////////////////////////////////
+int pad_layer      = 1; // change to 16 if pad parameters should be taken from bottom layer
+int nr_of_layers   = 2;
+int fill_polygons  = 1; // set to 0 if polygons are not to be filled
+                        // if set to 1, please make sure the width parameter of the polygons
+                        // is >> 0
+                        // make also sure the polygon filling is visible in EAGLE
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+
+string difversion = "4.0";
+string jobname, pcbname,
+       shapename[], // package names
+       t[];         // padtypes
+
+real   ang2, x, y;
+int    nr_of_nets = 0, nr_of_comps = 0, i, new, sx, dummy_pad_code;
+
+//-----------------------------------------------------
+string validname (string s) {
+  int i;
+  for (i = 0; s[i]; i++) {
+      if (s[i] == ',') s[i] = '_';
+      if (s[i] == ';') s[i] = '_';
+      if (s[i] == ')') s[i] = '_';
+                                     // add further substitutions here
+      }
+  return s;
+}
+//-----------------------------------------------------
+int u2u(int x) {   // resolution 1/10000 mm
+  // return u2mil(x); // mil
+  return x;
+}
+//-----------------------------------------------------
+int u2x(int x) {
+  return u2u(x);
+}
+//-----------------------------------------------------
+int u2y(int x) {
+  return u2u(x);         // correct sign, was always minus 2005.11.09 alf@cadsoft.de
+}
+//-----------------------------------------------------
+real deg2arc(int x) { // degree to arc
+  return x*PI/180;
+}
+//-----------------------------------------------------
+int u2ang(real x) {
+  if (x > 360)
+     x = x -360;
+  return x;
+}
+//----------------------------------------------------
+void relco (UL_ELEMENT E, int xt, int yt) { // change if finer rotation possible
+  xt = xt - E.x; yt = yt - E.y; // move part origin to 0,0
+  if (E.mirror) {              // flip back if mirrored
+     x = -x;
+     }
+  if (E.angle == 0) {           // rotate to zero position
+     x = xt; y = yt;
+     }
+  if (E.angle == 90) {
+     x = yt;  y = -xt;
+     }
+  if (E.angle == 180) {
+     x = -xt; y = -yt;
+     }
+  if (E.angle == 270) {
+     x = -yt; y = xt;
+     }
+  }
+//-----------------------------------------------------
+string padtype(UL_PACKAGE P, UL_CONTACT C) {
+  string s;
+  int pdi;
+  if (C.pad) {
+     pdi = u2u(C.pad.diameter[pad_layer]);
+     sprintf(s, "pad_%d_%d_%d", C.pad.shape[pad_layer], u2u(C.pad.diameter[pad_layer]), u2u(C.pad.drill));
+     }
+  if (C.smd) {
+     sprintf(s, "smd_%d_%d", u2x(C.smd.dx), u2y(C.smd.dy));
+     }
+  return s;
+}
+//-----------------------------------------------------
+int padindex(UL_PACKAGE P,UL_CONTACT C) {
+  int i = 0;
+  for (i = 0; t[i]; i++) {
+      if (t[i] == padtype(P,C))
+         return i+1;
+      }
+   return i; // should not be possible
+}
+//-----------------------------------------------------
+string viatype(UL_VIA V) {
+  string s;
+  int pdi;
+  pdi = u2u(V.diameter[pad_layer]);
+  sprintf(s, "pad_%d_%d_%d", V.shape[pad_layer], u2u(V.diameter[pad_layer]), u2u(V.drill));
+  return s;
+}
+//-----------------------------------------------------
+int viaindex(UL_VIA V) {
+  int i = 0;
+  for (i = 0; t[i]; i++) {
+      if (t[i] == viatype(V))
+         return i+1;
+      }
+   return i; // should not be possible
+}
+//-----------------------------------------------------
+int realnet(UL_SIGNAL S) {
+  S.contactrefs(S)
+    return 1;
+  return 0;
+}
+
+//////////////////////////////////////////////////////
+void create_environment () {
+  int t = time();
+  printf("    { ENVIRONMENT\n");
+  printf("      { SOURCE \"EAGLE %d.%02d %s Revision %s\" }\n", EAGLE_VERSION, EAGLE_RELEASE, filename(argv[0]),REVISION);
+  printf("      { VERSION %s }\n", difversion);
+  printf("      { DATE %d/%d/%d }\n", t2day(t),t2month(t)+1,t2year(t));
+  printf("      { TIME %d:%d:%d }\n", t2hour(t),t2minute(t),t2second(t));
+  printf("      { UNITS 1/10000 mm }\n");
+  printf("      { LAYER %d }\n", nr_of_layers);
+  printf("      { TOP_LAYER 1 }\n");
+  printf("      { BOTTOM_LAYER 16 }\n");
+  printf("      { NO_NET %d }\n", nr_of_nets);
+  printf("      { NO_COMP %d }\n", nr_of_comps);
+  printf("    }\n");
+}
+//////////////////////////////////////////////////////
+void board_data(UL_BOARD B) {
+  int i = 0;
+  printf ("    { BOARD\n");
+  printf ("      { F\n");
+  B.wires(W) { // if board outline as wires in board
+    i++;
+    if (W.layer == LAYER_DIMENSION) {
+        printf("        { L (%d,%d) (%d,%d) }\n", u2x(W.x1), u2y(W.y1), u2x(W.x2), u2y(W.y2));
+      }
+    }
+
+  if (i == 0) { // board contains no dim wires, try packages
+     B.elements(E) {
+       E.package.wires(W) {
+         if (W.layer == LAYER_DIMENSION) {
+            printf("        { L (%d,%d) (%d,%d) }\n", u2x(W.x1), u2y(W.y1), u2x(W.x2), u2y(W.y2));
+          }
+         }
+       }
+     }
+
+  printf ("      }\n");
+  printf ("    }\n");
+}
+//////////////////////////////////////////////////////
+void components(UL_BOARD B) {
+  int i, pic_nr;
+  string devname = "";
+  printf ("    { COMPONENTS\n");
+  B.elements(E) {
+    if (E.package) {
+        printf("      { COMP\n");
+        printf("        { COMP_DEF\n");
+        printf("          { NAME %s }\n", E.name);
+        printf("          { PART_NR %s }\n", validname(E.package.name)+"_"+validname(E.package.library));
+        printf("        }\n");
+        printf("        { PIN_DEF\n");
+        int issmd = 0;
+        E.package.contacts(C) {
+          printf("          { PIN %s { NET %s } }\n", C.name, C.signal);
+          if (C.smd) issmd = 1;
+          }
+        // find picture code
+        for (i=0; shapename[i] != validname(E.package.name)+"_"+validname(E.package.library); i++) {
+            }
+        pic_nr = i;
+        printf("        }\n");
+        printf("        { PICTURE\n");
+        printf("          { ORIGIN (%d,%d) }\n", u2x(E.x), u2y(E.y));
+        printf("          { PIC %d }\n", pic_nr);
+        printf("          { ROTATION %d }\n", u2ang(E.angle));
+        int mside = 1;
+        if (E.mirror) {
+           mside = 2;
+           }
+        printf("          { M_SIDE %d }\n", mside);
+        if (issmd) {
+           printf("          { KIND SMD }\n");
+           }
+
+        /* implement later if necessary
+        E.texts(T) {
+          printf("        { TEXT\n");
+          printf("        }\n");
+          }
+        */
+
+        printf("        }\n");
+        printf("      }\n");
+        }
+     }
+  printf("    }\n");
+}
+//////////////////////////////////////////////////////
+void pad_symbols(UL_BOARD B) {
+  int    i, j = 0, new;              // j+1 = pad index; t[] contains padtypes
+  printf ("    { PAD_DEF\n");
+  B.elements(E) {
+    E.package.contacts(C) {
+      if (1 /* C.pad */) {
+         new = 1;                    // padtype not generated yet
+         for (i = 0; t[i]; i++) {
+             if (t[i] == padtype(E.package, C))
+                new = 0;             // padtype exists
+             }
+         if (new) {
+            t[j] = padtype(E.package, C);
+            j++;
+            if (C.pad)
+               printf("      { PAD %d\n        { SIZE %d }\n        { DRILL %d }\n      }\n",
+                   j,abs(u2u(C.pad.diameter[pad_layer])),abs(u2u(C.pad.drill)));
+            if (C.smd)
+               printf("      { PAD %d\n        { SIZE %d }\n        { DRILL 0 }\n      }\n",
+                   j, min(abs(u2x(C.smd.dx)), abs(u2y(C.smd.dy))));
+            }
+         }
+      }
+    }
+  B.signals(S) {
+    S.vias(V) {
+      new = 1;
+      for (i = 0; t[i]; i++) {
+          if (t[i] == viatype(V))
+             new = 0;                // padtype exists
+          }
+      if (new) {
+         t[j] = viatype(V);
+         j++;
+
+         dummy_pad_code = j; // find pad code for dummy pad
+
+         printf("      { PAD %d\n        { SIZE %d }\n        { DRILL %d }\n      }\n",
+             j,u2u(V.diameter[pad_layer]),u2u(V.drill));
+
+
+         }
+      }
+    }
+  printf ("    }\n");
+}
+
+//////////////////////////////////////////////////////
+// 2008-05-27: Corrected relativ coordinates if package rotate in 0.1 degree alf@cadsoft.de
+
+void picturePackage(UL_PACKAGE P, int ox, int oy) {
+  real   angle, delta = 15;
+
+  P.wires(W) {
+    if (W.layer == LAYER_TPLACE || W.layer == LAYER_TDOCU || W.layer == LAYER_BPLACE || W.layer == LAYER_BDOCU) {
+      if (W.arc) {
+        // process arcs (done with wire segments)
+        printf("    { L (%d,%d)\n", u2x(W.arc.x1-ox), u2y(W.arc.y1-oy));
+        angle = W.arc.angle1 + delta;
+        while (angle < W.arc.angle2) {
+          printf("        (%d,%d)\n",
+                     u2x((W.arc.xc-ox+W.arc.radius) * cos(deg2arc(angle))),
+                     u2y((W.arc.yc-oy+W.arc.radius) * sin(deg2arc(angle))));
+          angle += delta;
+        }
+
+        printf("        (%d,%d)\n    }\n", u2x(W.arc.x2-ox), u2y(W.arc.y2-oy));
+      }
+      else {
+        printf("    { Linie (%d,%d) ", u2x(W.x1-ox), u2y(W.y1-oy));
+        printf("(%d,%d) }\n", u2x(W.x2-ox), u2y(W.y2-oy));
+      }
+    }
+  }
+  P.circles(W) {
+    if (W.layer == LAYER_TPLACE || W.layer == LAYER_TDOCU || W.layer == LAYER_BPLACE || W.layer == LAYER_BDOCU) {
+      printf("    { L (%d,%d)\n", u2x(W.x-ox+W.radius), u2y(W.y-oy));
+      angle = 0;
+      while (angle < 360) {
+        printf("        (%d,%d)\n", u2x((W.x-ox+W.radius) * cos(deg2arc(angle))), u2y((W.y-oy+W.radius) * sin(deg2arc(angle))));
+        angle += delta;
+      }
+      printf("        (%d,%d)\n    }\n", u2x(W.x-ox+W.radius), u2y(W.y-oy));
+    }
+  }
+  P.rectangles(W) {
+    if (W.layer == LAYER_TPLACE || W.layer == LAYER_TDOCU || W.layer == LAYER_BPLACE || W.layer == LAYER_BDOCU) {
+      printf("    { L (%d,%d)\n", u2x(W.x1-ox), u2y(W.y1-oy));
+      printf("        (%d,%d)\n", u2x(W.x2-ox), u2y(W.y1-oy));
+      printf("        (%d,%d)\n", u2x(W.x2-ox), u2y(W.y2-oy));
+      printf("        (%d,%d)\n", u2x(W.x1-ox), u2y(W.y2-oy));
+      printf("        (%d,%d)\n    }\n", u2x(W.x1-ox), u2y(W.y1-oy));
+    }
+  }
+  int nr_of_pins = 0;
+  P.contacts(C) { nr_of_pins++;}
+  if (nr_of_pins) {
+    printf("    { PINS %d\n", nr_of_pins);
+  }
+  P.contacts(C) {
+    printf("           (%d,%d) %d\n", u2x(C.x-ox), u2y(C.y-oy), padindex(P, C)); // Pin IDs
+  }
+  if (nr_of_pins) {
+    printf("    }\n");
+  }
+  printf("    { SPECIFIC \"%s\" }\n", validname(P.name)+"_"+validname(P.library)); // PACK.NAME
+  printf("  }\n"); // end pic n
+  return;
+}
+
+
+//////////////////////////////////////////////////////
+void pictures(UL_BOARD B) {
+  printf ("{ PIC_LIB\n");
+  sx=0;
+  B.elements(E) {
+    if (E.package) {
+       new = 1;                    // padtype not generated yet
+       for (i = 0; shapename[i]; i++) {
+           if (shapename[i] == validname(E.package.name)+"_"+validname(E.package.library))
+              new = 0;         // ident. package exists
+           }
+       if (new) {
+          shapename[sx] = validname(E.package.name)+"_"+validname(E.package.library);
+          printf("  { PIC %d\n",sx++);  // PACKAGE NR
+          picturePackage(E.package, E.x, E.y);
+          }
+       }
+    }
+
+  printf("  { PIC 999\n");
+  printf("    {  R (0, 0) }\n");
+  printf("    {  PINS 1 (0, 0) %d }\n", dummy_pad_code);
+  printf("  }\n");
+
+  printf("}\n");
+}
+
+//////////////////////////////////////////////////////
+void nets(UL_BOARD B) {
+  printf("    { NET_DEF\n");
+  B.signals(S) {
+    if (realnet(S)) {
+     printf("      { NET %s\n", S.name);
+     S.wires(W) {
+       printf("        { W (%d, %d) %d %d (%d %d) %d %d }\n", u2x(W.x1), u2y(W.y1), W.layer, u2u(W.width), u2x(W.x2), u2y(W.y2), W.layer, u2u(W.width));
+       }
+
+     S.polygons(P) {
+       P.contours(W) {
+         printf("        { W (%d, %d) %d %d (%d %d) %d %d }\n", u2x(W.x1), u2y(W.y1), W.layer, u2u(W.width), u2x(W.x2), u2y(W.y2), W.layer, u2u(W.width));
+         }
+       if (fill_polygons) {
+            P.fillings(W) {
+              printf("        { W (%d, %d) %d %d (%d %d) %d %d }\n", u2x(W.x1), u2y(W.y1), W.layer, u2u(W.width), u2x(W.x2), u2y(W.y2), W.layer, u2u(W.width));
+            }
+          }
+       }
+
+     S.vias(V) {
+       printf("        { V (%d, %d) %d 1, 15 }\n", u2x(V.x), u2y(V.y), viaindex(V));
+       }
+     printf("      }\n");
+     }
+   }
+  printf("    }\n");
+}
+
+//////////////////////////////////////////////////////
+void net_comp_count(UL_BOARD B) {
+  nr_of_nets = 0;
+  nr_of_comps = 0;
+  B.signals(S) {
+    if (realnet(S)) {
+       nr_of_nets++;
+     }
+   }
+  B.elements(E) {
+   if (E.package) {
+     nr_of_comps++;
+     }
+   }
+}
+
+//////////////////////////////////////////////////////
+
+if (board) board(B) {
+   jobname = filename(filesetext(B.name, ""));
+   pcbname = filename(filesetext(B.name, ""));
+
+   string fileName = dlgFileSave("Save DIF 4.0 File", filesetext(B.name, ".dif"), "*.dif");
+   if (fileName == "") exit(0);
+
+   output(fileName) {
+     printf("{ JOB %s\n", jobname);
+     printf("  { PCB %s\n", pcbname);
+     net_comp_count(B);
+     create_environment();
+     board_data(B);
+     pad_symbols(B);
+     pictures(B);
+     nets(B);
+     components(B);
+     printf("  }\n");
+     printf("}\n");
+     }
+   }
+
+
+else {
+   dlgMessageBox("\n   Start this ULP in a Board    \n");
+   exit (0);
+ }

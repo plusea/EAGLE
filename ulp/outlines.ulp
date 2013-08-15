@@ -1,0 +1,430 @@
+#require 4.1105
+
+#usage "en: <b>Export outlines data</b>\n"
+           "<p>"
+           "Generates outlines data for a board layout."
+           "<p>"
+           "Usage: RUN outlines [ <i>device</i> [ <i>width</i> [ <i>layer</i> [ <i>filename</i> ]]]]"
+           "<p>"
+           "<table>"
+           "<tr><td>device:</td><td>Script | HPGL</td><tr>"
+           "<tr><td>width:</td><td>outlines width [mm]</td><tr>"
+           "<tr><td>layer:</td><td>1..16 (0 = active layer)</td><tr>"
+           "<tr><td>filename:</td><td>output file name</td><tr>"
+           "</table>"
+           "<p>"
+           "<author>Author: support@cadsoft.de</author>",
+       "de: <b>Konturdaten exportieren</b>\n"
+           "<p>"
+           "Erzeugt Konturdaten für ein Platinenlayout."
+           "<p>"
+           "Aufruf: RUN outlines [ <i>device</i> [ <i>width</i> [ <i>layer</i> [ <i>filename</i> ]]]]"
+           "<p>"
+           "<table>"
+           "<tr><td>device:</td><td>Script | HPGL</td><tr>"
+           "<tr><td>width:</td><td>Breite der Konturlinien [mm]</td><tr>"
+           "<tr><td>layer:</td><td>1..16 (0 = aktiver Layer)</td><tr>"
+           "<tr><td>filename:</td><td>Ausgabedatei</td><tr>"
+           "</table>"
+           "<p>"
+           "<author>Autor: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+/*
+   Complete the following steps to add a new output device definition:
+
+   1. Add a new member to the 'enum { devScript = 1, ...'
+   2. Add the new (unique!) device name to 'DeviceNames[]'
+   3. Add the necessary 'case dev...' branches to 'DeviceInit()', 'DeviceDraw()' and 'DeviceEnd()'
+*/
+
+string I18N[] = {
+  "en\v"
+  "de\v"
+  ,
+  "ERROR: \v"
+  "FEHLER: \v"
+  ,
+  "No board!\v"
+  "Kein Board!\v"
+  ,
+  "This program can only work in the board editor.\v"
+  "Dieses Programm kann nur im Board-Editor angewendet werden.\v"
+  ,
+  "Illegal width: \v"
+  "Ungültige Breite: \v"
+  ,
+  "The <i>width</i> must be greater than zero.\v"
+  "Die <i>Breite</i> muß größer als 0 sein.\v"
+  ,
+  "Illegal layer: \v"
+  "Ungültiger Layer: \v"
+  ,
+  "The <i>layer</i> must be one of 1..16 or 0 to use the current layer.\v"
+  "Der <i>Layer</i> muß im Bereich 1..16 liegen, oder 0 sein um den aktuellen Layer zu wählen.\v"
+  ,
+  "Select a device\v"
+  "Wählen Sie ein Ausgabegerät\v"
+  ,
+  "There is already a signal named \v"
+  "Es existiert bereits ein Signal namens \v"
+  ,
+  " in this board!\v"
+  " in diesem Board!\v"
+  ,
+  "Please make sure that there is no such signal in this board.\v"
+  "Bitte sorgen Sie dafür, daß es kein solches Signal in diesem Board gibt.\v"
+  ,
+  "Illegal device: \v"
+  "Ungültiges Ausgabegerät: \v"
+  ,
+  "Please select one of the known devices.\v"
+  "Bitte wählen Sie eines der bekannten Ausgabegeräte aus.\v"
+  ,
+  "No signal layer active!\v"
+  "Kein Signal-Layer aktiv!\v"
+  ,
+  "Please activate the signal layer to generate outlines for.\v"
+  "Bitte aktivieren den Signal-Layer für den Konturdaten generiert werden sollen.\v"
+  ,
+  "Invalid layer: \v"
+  "Ungültiger Layer: \v"
+  ,
+  "The <i>layer</i> was not found or is not active.\v"
+  "Der <i>Layer</i> konnte nicht gefunden werden oder ist nicht aktiv.\v"
+  ,
+  "Outlines Generator\v"
+  "Konturdaten-Generator\v"
+  ,
+  "&Width\v"
+  "&Breite\v"
+  ,
+  "&Layer\v"
+  "&Layer\v"
+  ,
+  "&Output file\v"
+  "&Ausgabedatei\v"
+  ,
+  "&Browse\v"
+  "&Durchsuchen\v"
+  ,
+  "Save Outlines file\v"
+  "Konturdaten speichern\v"
+  ,
+  "+OK\v"
+  "+OK\v"
+  ,
+  "No device selected!\v"
+  "Kein Ausgabegerät ausgewählt!\v"
+  ,
+  "Please select a device.\v"
+  "Bitte wählen Sie ein Ausgabegerät.\v"
+  ,
+  "Illegal width: 0\v"
+  "Ungültige Breite: 0\v"
+  ,
+  "The <i>width</i> must be greater than zero.\v"
+  "Die <i>Breite</i> muß größer als Null sein.\v"
+  ,
+  "-Cancel\v"
+  "-Abbrechen\v"
+  ,
+  "About\v"
+  "Info\v"
+  };
+
+int Language = strstr(I18N[0], language()) / 3;
+
+string tr(string s)
+{
+  string t = lookup(I18N, s, Language, '\v');
+  return t ? t : s;
+}
+
+void Fatal(string Message, string Details)
+{
+  dlgMessageBox(usage + "<hr><b>" + tr("ERROR: ") + Message + "</b><p>\n" + Details);
+  exit(1);
+}
+
+void Error(string Message, string Details)
+{
+  dlgMessageBox("<b>" + tr("ERROR: ") + Message + "</b><p>\n" + Details);
+}
+
+//
+// Parmameters
+//
+
+string DefaultSuffix = ".out";
+
+string Device;
+real   Width = 0;
+int    Layer = 0;
+string FileName;
+
+if (!board)
+   Fatal(tr("No board!"), tr("This program can only work in the board editor."));
+
+if (argv[1]) {
+   Device = argv[1];
+   if (argv[2]) {
+      Width = strtod(argv[2]);
+      if (Width <= 0)
+         Fatal(tr("Illegal width: ") + argv[2], tr("The <i>width</i> must be greater than zero."));
+      if (argv[3]) {
+         Layer = strtol(argv[3]);
+         if (Layer < 0 || Layer > 16)
+            Fatal(tr("Illegal layer: ") + argv[3], tr("The <i>layer</i> must be one of 1..16 or 0 to use the current layer."));
+         if (argv[4]) {
+            FileName = argv[4];
+            }
+         }
+      }
+   }
+
+if (!FileName)
+   board(B) FileName = filesetext(B.name, DefaultSuffix);
+
+//
+// The various output devices
+//
+
+enum { devScript = 1, devHPGL };
+string DeviceNames[] = { tr("Select a device"), "Script", "HPGL" };
+int SelectedDevice;
+
+void DeviceInit(void)
+{
+  // Do anything necessary to initialize the output device
+  switch (SelectedDevice) {
+    case devScript:
+         // TODO make the layer user definable?
+         printf("layer %d;\nset wire_bend 2; grid mm; change width %f;\n", Layer + 100, Width);
+         break;
+    case devHPGL:
+         break;
+    }
+}
+
+void DeviceDraw(int x1, int y1, int x2, int y2, int state)
+{
+  // Actually draw a line on the output device.
+  // 'state' is defined as
+  // 0 = this is the first line of a partial polygon
+  // 1 = this is a "normal" line (neither the first nor the last one)
+  // 2 = this is the last line of a partial polygon
+  switch (SelectedDevice) {
+    case devScript:
+         if (state == 0)
+            printf("wire (%f %f) (%f %f)", u2mm(x1), u2mm(y1), u2mm(x2), u2mm(y2));
+         else {
+            printf(" (%f %f)", u2mm(x2), u2mm(y2));
+            if (state == 2)
+               printf(";\n");
+            }
+         break;
+    case devHPGL:
+         if (state == 0)
+            printf("PU; PA %f %f; PD; PA %f %f;", u2mm(x1), u2mm(y1), u2mm(x2), u2mm(y2));
+         else {
+            printf(" PA %f %f", u2mm(x2), u2mm(y2));
+            if (state == 2)
+               printf("\n");
+            }
+         break;
+    }
+}
+
+void DeviceEnd(void)
+{
+  // Do anything necessary to end output to the device
+  switch (SelectedDevice) {
+    case devScript:
+         break;
+    case devHPGL:
+         printf("PU;\n");
+         break;
+    }
+}
+
+//
+// The actual outlines generator
+//
+
+string OutlinesSignalName = "_OUTLINES_";
+string Pass2 = "PASS_2";
+
+int InPass2 = argv[5] == Pass2;
+
+void GenerateOutlines(void)
+{
+  board(B) {
+    real f = 20, // mm frame
+         x1 = u2mm(B.area.x1) - f, y1 = u2mm(B.area.y1) - f,
+         x2 = u2mm(B.area.x2) + f, y2 = u2mm(B.area.y2) + f;
+    B.signals(S) {
+      if (S.name == OutlinesSignalName)
+         Fatal(tr("There is already a signal named ") + OutlinesSignalName + tr(" in this board!"), tr("Please make sure that there is no such signal in this board."));
+      }
+    string Cmd;
+    sprintf(Cmd, "grid mm;\n"
+                 "window fit;\n"
+                 "change isolate 0;\n"
+                 "change rank 6;\n"
+                 "change pour solid;\n"
+                 "change orphans on;\n"
+                 "layer %d;\n"
+                 "polygon %s %f (%f %f) (%f %f) (%f %f) (%f %f) (%f %f);\n"
+                 "ratsnest;\n"
+                 "run '%s' '%s' '%f' '%d' '%s' '%s';",
+                 Layer,
+                 OutlinesSignalName, Width, x1, y1, x2, y1, x2, y2, x1, y2, x1, y1,
+                 argv[0], Device, Width, Layer, FileName, Pass2);
+    exit(Cmd);
+    }
+}
+
+void WriteOutlines(void)
+{
+  board(B) {
+    output(FileName) {
+      string Cmd;
+      B.signals(S) {
+        if (S.name == OutlinesSignalName) {
+           S.polygons(P) {
+             int x1 = INT_MAX, y1 = INT_MAX, x2 = INT_MIN, y2 = INT_MIN;
+             int x0, y0, first = 1;
+             int FrameWire;
+             int State;
+
+             P.wires(W) {
+               x1 = min(x1, W.x1);
+               x2 = max(x2, W.x1);
+               y1 = min(y1, W.y1);
+               y2 = max(y2, W.y1);
+               }
+             DeviceInit();
+             P.contours(W) {
+               if (first) {
+                  // a new partial polygon is starting
+                  x0 = W.x1;
+                  y0 = W.y1;
+                  FrameWire = (x1 == x0 || x2 == x0) && (y1 == y0 || y2 == y0);
+                  State = 0;
+                  first = 0;
+                  }
+               else if (W.x2 == x0 && W.y2 == y0) {
+                  // this was the last wire of the partial polygon,
+                  // so the next wire (if any) will be the first wire
+                  // of the next partial polygon
+                  State = 2;
+                  first = 1;
+                  }
+               else
+                  State = 1;
+               if (!FrameWire)
+                  DeviceDraw(W.x1, W.y1, W.x2, W.y2, State);
+               }
+             DeviceEnd();
+             sprintf(Cmd, "delete (%f %f) (%f %f); window fit;\n", u2mm(x1), u2mm(y1), u2mm(x2), u2mm(y2));
+             }
+           break;
+           }
+        }
+      exit(Cmd);
+      }
+    }
+}
+
+//
+// Main program:
+//
+
+if (Device) {
+   int n;
+   while (DeviceNames[n]) {
+         if (strupr(DeviceNames[n]) == strupr(Device)) {
+            SelectedDevice = n;
+            break;
+            }
+         n++;
+         }
+   if (!SelectedDevice)
+      Fatal(tr("Illegal device: ") + Device, tr("Please select one of the known devices."));
+   }
+
+if (!InPass2) {
+   string Layers[];
+   int    SelectedLayer = -1;
+   int    ForceDialog = (!Device || !Width);
+
+   board(B) {
+     int n;
+     B.layers(L) {
+       if (L.number <= 16 && L.visible) {
+          if (Layer == L.number)
+             SelectedLayer = n;
+          sprintf(Layers[n++], "%d  %s", L.number, L.name);
+          }
+       }
+     if (n == 0)
+        Fatal(tr("No signal layer active!"), tr("Please activate the signal layer to generate outlines for."));
+     if (!Layer) {
+        if (n > 1)
+           ForceDialog = 1;
+        SelectedLayer = 0;
+        }
+     if (SelectedLayer < 0) {
+        string s;
+        sprintf(s, "%d", Layer);
+        Fatal(tr("Invalid layer: ") + s, tr("The <i>layer</i> was not found or is not active."));
+        }
+     }
+
+   if (ForceDialog) {
+      dlgDialog(tr("Outlines Generator")) {
+        dlgGridLayout {
+          dlgCell(0, 0) dlgLabel("&Device");
+          dlgCell(0, 1) dlgComboBox(DeviceNames, SelectedDevice) {
+            // TODO should we generalize this?
+            if (FileName && SelectedDevice == devScript)
+               FileName = filesetext(FileName, ".scr");
+            }
+          dlgCell(1, 0) dlgLabel(tr("&Width"));
+          dlgCell(1, 1) dlgRealEdit(Width, 0, 10);
+          dlgCell(2, 0) dlgLabel(tr("&Layer"));
+          dlgCell(2, 1) dlgComboBox(Layers, SelectedLayer);
+          }
+        dlgHBoxLayout {
+          dlgLabel(tr("&Output file"));
+          dlgStringEdit(FileName);
+          dlgPushButton(tr("&Browse")) {
+            string fn = dlgFileSave(tr("Save Outlines file"), FileName);
+            if (fn)
+               FileName = fn;
+            }
+          }
+        dlgStretch(1);
+        dlgHBoxLayout {
+          dlgStretch(1);
+          dlgPushButton(tr("+OK")) {
+            if (!SelectedDevice)
+               Error(tr("No device selected!"), tr("Please select a device."));
+            else if (!Width)
+               Error(tr("Illegal width: 0"), tr("The <i>width</i> must be greater than zero."));
+            else
+               dlgAccept();
+            }
+          dlgPushButton(tr("-Cancel")) { dlgReject(); exit(1); }
+          dlgPushButton(tr("About")) dlgMessageBox(usage);
+          }
+        };
+      }
+   Device = DeviceNames[SelectedDevice];
+   Layer = strtol(Layers[SelectedLayer]);
+   GenerateOutlines();
+   }
+else
+   WriteOutlines();

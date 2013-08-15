@@ -1,0 +1,13 @@
+<language de>
+<b>CAM-Prozessor-Jobs</b>
+<p>
+Der CAM-Prozessor stellt einen Job-Mechanismus zur Verfügung, mit
+dessen Hilfe die gesamte Erstellung der Ausgabedaten für eine
+Platine automatisiert werden kann.<p>
+</language>
+<language en>
+<b>CAM Processor Jobs</b>
+<p>
+The CAM Processor provides a job mechanism with the aid of which
+the creation of the output data for a board can be automated.
+</language>

@@ -1,0 +1,172 @@
+#usage "<b>Generate a wider silk screen</b>\n"
+       "<p>"
+       "Some board manufacturers want to have at least a width of 8mil "
+       "for silk screen lines in order to guarantee legible results. "
+       "EAGLE libraries use 5 mil width for silk screen as default. "
+       "This ULP changes all silk screen elemtents to a minimum "
+       "with of 8 mil . All elements of layers 21 and 22 "
+       "are written into new layers 121(_tplace) and 122 (_bplace). "
+       "Texts are changes as well. The new ratio is 16% (default 8). That "
+       "means texts with a size of 50 mil get a wire width of 8 mil as well. "
+       "<p>"
+       "Two new layers will be defined and the new silk screen will be "
+       "generated. For generating GERBER data be aware that you have to "
+       "activate layers 121 or 122 instead of the original layers 21 and 22."
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+                            // Define your own silk screen width here
+real Silkwidth  = 8.0 ;     // in mil
+int  NewTextRatio  = 16 ;   // and the new text ratio
+
+int  source, newlay, tplace = 21,
+                     bplace = 22,
+                     offset = 100;
+
+string TextOrientation;
+string cmd = "SET UNDO_LOG OFF;\n"; // advisable for speed reasons
+string h;
+
+void header(void) {
+  h = "";sprintf(h, "layer %d _tplace;\n", tplace+offset);cmd += h; // here you can change the new
+  h = "";sprintf(h, "layer %d _bplace;\n", bplace+offset);cmd += h;          // layers names
+  h = "";sprintf(h, "set color_layer %d yellow;\n", tplace+offset);cmd += h; // and
+  h = "";sprintf(h, "set color_layer %d yellow;\n", bplace+offset);cmd += h; // colors
+  h = "";sprintf(h, "set wire_bend 2;\n");cmd += h;
+  h = "";sprintf(h, "\nGRID mil;\n\n");cmd += h;
+}
+
+void searchelements(UL_ELEMENT E) {
+  newlay = source + offset;
+  E.package.wires(W) {
+    if (W.arc) {
+      if (W.layer == source && u2mil(W.width) <= Silkwidth) {
+          h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+          h = "";sprintf(h, "ARC %5.3f ccw (%5.3f %5.3f) (%5.3f %5.3f) (%5.3f %5.3f);\n",
+             Silkwidth, u2mil(W.arc.x1), u2mil(W.arc.y1), u2mil(2*(W.arc.xc)-W.arc.x1),
+             u2mil(2*(W.arc.yc) - W.arc.y1), u2mil(W.arc.x2), u2mil(W.arc.y2));cmd += h;
+      }
+      if (W.layer == source && u2mil(W.width) > Silkwidth) {
+          h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+          h = "";sprintf(h, "ARC %5.3f ccw (%5.3f %5.3f) (%5.3f %5.3f) (%5.3f %5.3f);\n",
+             u2mil(W.arc.width), u2mil(W.arc.x1), u2mil(W.arc.y1), u2mil(2*(W.arc.xc)-W.arc.x1),
+             u2mil(2*(W.arc.yc) - W.arc.y1), u2mil(W.arc.x2), u2mil(W.arc.y2));cmd += h;
+      }
+    }
+    else {
+      if (W.layer == source && u2mil(W.width) <= Silkwidth) {
+
+          h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+          h = "";sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+            Silkwidth, u2mil(W.x1), u2mil(W.y1), u2mil(W.x2), u2mil(W.y2));cmd += h;
+      }
+      if (W.layer == source && u2mil(W.width) > Silkwidth) {
+
+          h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+          h = "";sprintf(h, "WIRE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+            u2mil(W.width), u2mil(W.x1), u2mil(W.y1), u2mil(W.x2), u2mil(W.y2));cmd += h;
+      }
+    }
+  }
+  E.package.circles(C) {
+    if (C.layer == source && u2mil(C.width) <= Silkwidth && u2mil(C.width) != 0) {
+
+        h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+        h = "";sprintf(h, "CIRCLE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+           Silkwidth, u2mil(C.x), u2mil(C.y), u2mil(C.x + C.radius), u2mil(C.y));cmd += h;
+    }
+    if (C.layer == source && (u2mil(C.width) > Silkwidth || u2mil(C.width) == 0)) {
+
+        h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+        h = "";sprintf(h, "CIRCLE %5.3f (%5.3f %5.3f) (%5.3f %5.3f);\n",
+           u2mil(C.width), u2mil(C.x), u2mil(C.y), u2mil(C.x + C.radius), u2mil(C.y));cmd += h;
+    }
+  }
+  E.package.rectangles(R) {
+    if (R.layer == source) {
+
+        h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+        h = "";sprintf(h, "RECT (%5.3f %5.3f) (%5.3f %5.3f);\n", u2mil(R.x1), u2mil(R.y1),
+           u2mil(R.x2), u2mil(R.y2));cmd += h;
+    }
+  }
+  E.package.polygons(P) {
+    if (P.layer == source && u2mil(P.width) <= Silkwidth) {
+        P.wires(WP) {
+          h = "";sprintf(h, "POLYGON %5.3f (%5.3f %5.3f)\n ",Silkwidth, u2mil(WP.x1), u2mil(WP.y1));cmd += h;
+          break;
+        }
+        P.wires(WP) {
+          h = "";sprintf(h, " %+f (%5.3f %5.3f)", WP.curve, u2mil(WP.x2), u2mil(WP.y2));cmd += h;
+        }
+      h = "";sprintf(h, ";\n");cmd += h;
+    }
+    if (P.layer == source && u2mil(P.width) > Silkwidth) {
+        P.wires(WP) {
+          h = "";sprintf(h, "POLYGON %5.3f (%5.3f %5.3f)\n ",u2mil(P.width),
+                 u2mil(WP.x1), u2mil(WP.y1));cmd += h;
+          break;
+        }
+        P.wires(WP) {
+          h = "";sprintf(h, " (%5.3f %5.3f)", u2mil(WP.x2), u2mil(WP.y2));cmd += h;
+        }
+      h = "";sprintf(h, ";\n");cmd += h;
+    }
+  }
+  E.package.texts(T) {
+    if (T.layer == source && T.ratio < NewTextRatio) {
+
+        h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+        h = "";sprintf(h, "Change Ratio %d;\n", NewTextRatio);cmd += h;
+        h = "";sprintf(h, "Change Size %5.3f;\n", u2mil(T.size));cmd += h;
+        h = "";sprintf(h, "TEXT '%s' %s%1.0f (%5.3f %5.3f);\n",
+           T.value, TextOrientation, T.angle, u2mil(T.x), u2mil(T.y));cmd += h;
+     }
+     if (T.layer == source && T.ratio >= NewTextRatio) {
+
+        h = "";sprintf(h, "Layer %d;\n", newlay);cmd += h;
+        h = "";sprintf(h, "Change Size %5.3f;\n", u2mil(T.size));cmd += h;
+        h = "";sprintf(h, "TEXT '%s' %s%1.0f (%5.3f %5.3f);\n",
+           T.value, TextOrientation, T.angle, u2mil(T.x), u2mil(T.y));cmd += h;
+     }
+  }
+}
+
+if (board) {
+ board(B) {
+
+     header();
+
+     B.elements(E) {
+      source = tplace;
+      TextOrientation = "R";
+      searchelements(E);
+
+      source = bplace;
+      TextOrientation = "MR";
+      searchelements(E);
+     }
+  }
+
+cmd += "SET UNDO_LOG ON;\n";
+
+//  Dialog
+int Result = dlgDialog("Script to generate the new silk screen") {
+  dlgTextEdit(cmd);
+  dlgHBoxLayout {
+     dlgPushButton("+Execute") dlgAccept();
+     dlgPushButton("-Cancel") dlgReject();
+     }
+  };
+
+if (Result == 0) exit(0);
+
+exit(cmd);
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Board    \n");
+   exit (0);
+}

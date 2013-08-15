@@ -1,0 +1,145 @@
+#usage "<b>Export data for SMD glue dispenser equipment</b>\n"
+       "<p>"
+       "<ul>"
+       "<li>Define glue points in library as circles on tGlue layer. Use as many circles"
+       "    per package as you like. If no circle is defined, one default point is used"
+       "    (center of wires in tPlace layer)."
+       "<li>Run gluemark.ulp to generate circles on layers 111 and 112, indicating glue points"
+       "    for smd packages on top or bottom layers."
+       "<li>Edit 111 + 112 if necessary (you can also add or delete circles) and then use"
+       "    glueout4.ulp to generate data for glue dispenser. glueout.ulp has to be changed to"
+       "    get the data format wanted."
+       "<li>Use gluetop.dat and gluebot.dat for your dispenser."
+       "</ul>"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+//******* workaround due to beta version error
+//all min function calls changed to minm, max changed to maxm
+real minm(real a, real b) {
+  if (a <= b) return a;
+  else        return b;
+  }
+real maxm(real a, real b) {
+  if (a >= b) return a;
+  else        return b;
+  }
+//*******
+
+int issmd, gluedef, ontop;
+real xmin , xmax, ymin, ymax, x, y;
+string h, cmd;
+
+void setgluepoint(UL_ELEMENT E){
+ gluedef = 0;
+ E.package.circles(CI){
+    if (CI.layer == LAYER_TGLUE) {
+        x = u2inch(CI.x); y = u2inch(CI.y);
+        h = "";
+        sprintf(h,"Layer tGTest;\nCircle 0.016 (%f %f) (%f %f);\n", x, y, x+0.016, y);
+        cmd += h;
+        gluedef = 1;
+       }
+    if (CI.layer == LAYER_BGLUE) {
+        x = u2inch(CI.x); y = u2inch(CI.y);
+        h = "";
+        sprintf(h,"Layer bGTest;\nCircle 0.016 (%f %f) (%f %f);\n", x, y, x+0.016, y);
+        cmd += h;
+        gluedef = 1;
+       }
+ }
+
+ xmin = u2inch(E.x); xmax = xmin;
+ ymin = u2inch(E.y); ymax = ymin;
+ if (gluedef == 0){
+    E.package.wires(W){
+      if (W.layer == LAYER_TPLACE) {
+         ontop = 1;
+         xmin = min(u2inch(W.x1),xmin);output("test.scr") {printf("u2iW.x%f\n",u2inch(W.x1));}
+         xmin = min(u2inch(W.x2),xmin);
+         ymin = min(u2inch(W.y1),ymin);
+         ymin = min(u2inch(W.y2),ymin);
+         xmax = max(u2inch(W.x1),xmax);
+         xmax = max(u2inch(W.x2),xmax);
+         ymax = max(u2inch(W.y1),ymax);
+         ymax = max(u2inch(W.y2),ymax);
+         }
+      if (W.layer == LAYER_BPLACE) {
+         ontop = 0;
+         xmin = min(u2inch(W.x1),xmin);
+         xmin = min(u2inch(W.x2),xmin);
+         ymin = min(u2inch(W.y1),ymin);
+         ymin = min(u2inch(W.y2),ymin);
+         xmax = max(u2inch(W.x1),xmax);
+         xmax = max(u2inch(W.x2),xmax);
+         ymax = max(u2inch(W.y1),ymax);
+         ymax = max(u2inch(W.y2),ymax);
+         }
+      }
+    x = (xmin+xmax)/2; y = (ymin+ymax)/2;
+    if (ontop == 1) {
+       h = "";
+       sprintf(h,"LAYER tGTest;\nCircle 0.016 (%f %f) (%f %f);\n", x, y, x+0.016, y);
+       cmd += h;
+       }
+    if (ontop == 0) {
+       h = "";
+       sprintf(h,"LAYER bGTest;\nCircle 0.016 (%f %f) (%f %f);\n", x, y, x+0.016, y);
+       cmd += h;
+       }
+    }
+}
+
+cmd = "";
+h = "";
+sprintf(h,"Layer 111 tGTest;\n");
+cmd += h;
+h = "";
+sprintf(h,"Layer 112 bGTest;\n");
+cmd += h;
+h = "";
+sprintf(h,"Set Color_Layer 111 red;\n");
+cmd += h;
+h = "";
+sprintf(h,"Set Color_Layer 112 blue;\n");
+cmd += h;
+h = "";
+sprintf(h,"Grid inch;\n");
+cmd += h;
+
+if (board){
+board(B){
+ B.elements(E) {
+     issmd = 0;
+     E.package.contacts(C) {
+       if (C.smd) {
+           issmd = 1;
+           break;
+       }
+     }
+     if (issmd) {
+        setgluepoint(E);
+     }
+
+ }
+}
+//  EditBox
+int Result = dlgDialog("Edit and Execute") {
+    dlgTextEdit(cmd);
+    dlgHBoxLayout {
+       dlgPushButton("+Execute") dlgAccept();
+       dlgPushButton("-Cancel") dlgReject();
+       }
+    };
+if (!Result) exit(0);
+
+exit(cmd);
+
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Board    \n");
+   exit (0);
+}

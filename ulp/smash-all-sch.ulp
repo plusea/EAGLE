@@ -1,0 +1,55 @@
+#usage "<b>Smash all gates of a schematic</b>\n"
+       "<p>"
+       "<author>Author: support@cadsoft.de</author>"
+
+// THIS PROGRAM IS PROVIDED AS IS AND WITHOUT WARRANTY OF ANY KIND, EXPRESSED OR IMPLIED
+
+string cmd;
+string c;
+
+void visible(UL_SCHEMATIC S) {
+  sprintf(c, "DISP NONE;\nDISP ");
+  cmd += c;
+  S.layers(L) {
+     if (L.visible) {
+        sprintf(c, "%d ", L.number);
+        cmd += c;
+        }
+     }
+  cmd += ";\n";
+  return;
+}
+
+if (schematic) {
+ schematic(S) {
+   cmd = "DISPLAY NONE 94;\n";
+   cmd += "GRID MIL 1;\n";
+   S.sheets(SH) {
+      sprintf(c, "EDIT .s%d;\n", SH.number);
+      cmd += c;
+      SH.parts(P) {
+         if (P.device.package) {    // **** only Devices with Package
+                                   // **** without Supply symbol Frames ect...
+            P.instances(I) {
+               if (I.sheet != 0) {
+                  sprintf(c, "SMASH (%.2f %.2f);\n", u2mil(I.x), u2mil(I.y) );
+                  cmd += c;
+               }
+            }
+         }
+      }
+   }
+
+  sprintf(c, "GRID INCH 0.1;\n");
+  cmd += c;
+  sprintf(c, "EDIT .S1;\n");
+  cmd += c;
+  visible(S);
+  exit (cmd);
+ }
+}
+
+else {
+   dlgMessageBox("\n    Start this ULP in a Schematic    \n");
+   exit (0);
+}
