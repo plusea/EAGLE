@@ -1512,6 +1512,146 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 </deviceset>
 </devicesets>
 </library>
+<library name="SparkFun-Connectors">
+<description>&lt;h3&gt;SparkFun Electronics' preferred foot prints&lt;/h3&gt;
+In this library you'll find connectors and sockets- basically anything that can be plugged into or onto.&lt;br&gt;&lt;br&gt;
+We've spent an enormous amount of time creating and checking these footprints and parts, but it is the end user's responsibility to ensure correctness and suitablity for a given componet or application. If you enjoy using this library, please buy one of our products at www.sparkfun.com.
+&lt;br&gt;&lt;br&gt;
+&lt;b&gt;Licensing:&lt;/b&gt; CC v3.0 Share-Alike You are welcome to use this library for commercial purposes. For attribution, we ask that when you begin to sell your device using our footprint, you email us with a link to the product being sold. We want bragging rights that we helped (in a very small part) to create your 8th world wonder. We would like the opportunity to feature your device on our homepage.</description>
+<packages>
+<package name="USB-MINIB">
+<description>&lt;b&gt;USB Series Mini-B Surface Mounted&lt;/b&gt;</description>
+<wire x1="-1.3" y1="3.8" x2="0.8" y2="3.8" width="0.2032" layer="21"/>
+<wire x1="3.3" y1="3.1" x2="3.3" y2="2.2" width="0.2032" layer="21"/>
+<wire x1="3.3" y1="-2.2" x2="3.3" y2="-3.1" width="0.2032" layer="21"/>
+<wire x1="0.8" y1="-3.8" x2="-1.3" y2="-3.8" width="0.2032" layer="21"/>
+<wire x1="-5.9" y1="3.8" x2="-5.9" y2="-3.8" width="0.2032" layer="51"/>
+<wire x1="-5.9" y1="-3.8" x2="-4.5" y2="-3.8" width="0.2032" layer="51"/>
+<wire x1="-5.9" y1="3.8" x2="-4.5" y2="3.8" width="0.2032" layer="51"/>
+<smd name="D+" x="2.5" y="0" dx="2.5" dy="0.5" layer="1"/>
+<smd name="D-" x="2.5" y="0.8" dx="2.5" dy="0.5" layer="1"/>
+<smd name="GND" x="2.5" y="-1.6" dx="2.5" dy="0.5" layer="1"/>
+<smd name="ID" x="2.5" y="-0.8" dx="2.5" dy="0.5" layer="1"/>
+<smd name="MTN3" x="-3" y="-4.5" dx="2.5" dy="2" layer="1"/>
+<smd name="MTN1" x="-3" y="4.5" dx="2.5" dy="2" layer="1"/>
+<smd name="MTN4" x="2.5" y="-4.5" dx="2.5" dy="2" layer="1"/>
+<smd name="MTN2" x="2.5" y="4.5" dx="2.5" dy="2" layer="1"/>
+<smd name="VBUS" x="2.5" y="1.6" dx="2.5" dy="0.5" layer="1"/>
+<text x="-3.81" y="1.27" size="0.4064" layer="25">&gt;NAME</text>
+<text x="-3.81" y="0" size="0.4064" layer="27">&gt;VALUE</text>
+<hole x="0" y="2.2" drill="0.9"/>
+<hole x="0" y="-2.2" drill="0.9"/>
+</package>
+</packages>
+<symbols>
+<symbol name="USB-5PIN">
+<wire x1="7.62" y1="12.7" x2="0" y2="12.7" width="0.254" layer="94"/>
+<wire x1="0" y1="12.7" x2="0" y2="-2.54" width="0.254" layer="94"/>
+<wire x1="0" y1="-2.54" x2="7.62" y2="-2.54" width="0.254" layer="94"/>
+<text x="5.334" y="1.778" size="2.54" layer="94" rot="R90">USB</text>
+<pin name="D+" x="-2.54" y="5.08" visible="pad" length="short"/>
+<pin name="D-" x="-2.54" y="7.62" visible="pad" length="short"/>
+<pin name="VBUS" x="-2.54" y="10.16" visible="pad" length="short"/>
+<pin name="GND" x="-2.54" y="0" visible="pad" length="short"/>
+<pin name="ID" x="-2.54" y="2.54" visible="pad" length="short"/>
+<pin name="MTN1" x="2.54" y="15.24" visible="pad" length="short" rot="R270"/>
+<pin name="MTN2" x="5.08" y="15.24" visible="pad" length="short" rot="R270"/>
+<pin name="MTN3" x="2.54" y="-5.08" visible="pad" length="short" rot="R90"/>
+<pin name="MTN4" x="5.08" y="-5.08" visible="pad" length="short" rot="R90"/>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="USB-MINIB">
+<description>&lt;b&gt;Mini-USB "B" connector with 5th pin broken out.&lt;/b&gt;&lt;p&gt;
+Created new symbol breaking out 5th "ID" pin in mini/micro USB connector spec.  See: http://en.wikipedia.org/wiki/Mini_usb#Cables.  Uses same footprint as 4-pin symbol.&lt;p&gt;
+ 
+
+Also added pins to connect to mounting / shield pads if required (probably not generally needed as signals aren't shielded once they leave the connector).</description>
+<gates>
+<gate name="G$1" symbol="USB-5PIN" x="0" y="0"/>
+</gates>
+<devices>
+<device name="-5PIN" package="USB-MINIB">
+<connects>
+<connect gate="G$1" pin="D+" pad="D+"/>
+<connect gate="G$1" pin="D-" pad="D-"/>
+<connect gate="G$1" pin="GND" pad="GND"/>
+<connect gate="G$1" pin="ID" pad="ID"/>
+<connect gate="G$1" pin="MTN1" pad="MTN3"/>
+<connect gate="G$1" pin="MTN2" pad="MTN1"/>
+<connect gate="G$1" pin="MTN3" pad="MTN2"/>
+<connect gate="G$1" pin="MTN4" pad="MTN4"/>
+<connect gate="G$1" pin="VBUS" pad="VBUS"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
+<library name="SparkFun-Electromechanical">
+<description>&lt;h3&gt;SparkFun Electronics' preferred foot prints&lt;/h3&gt;
+In this library you'll find anything that moves- switches, relays, buttons, potentiometers. Also, anything that goes on a board but isn't electrical in nature- screws, standoffs, etc.&lt;br&gt;&lt;br&gt;
+We've spent an enormous amount of time creating and checking these footprints and parts, but it is the end user's responsibility to ensure correctness and suitablity for a given componet or application. If you enjoy using this library, please buy one of our products at www.sparkfun.com.
+&lt;br&gt;&lt;br&gt;
+&lt;b&gt;Licensing:&lt;/b&gt; CC v3.0 Share-Alike You are welcome to use this library for commercial purposes. For attribution, we ask that when you begin to sell your device using our footprint, you email us with a link to the product being sold. We want bragging rights that we helped (in a very small part) to create your 8th world wonder. We would like the opportunity to feature your device on our homepage.</description>
+<packages>
+<package name="VIBE-MOTOR-10MM">
+<wire x1="-1.5" y1="-4.8" x2="-1.5" y2="-7.8" width="0.127" layer="51"/>
+<wire x1="-1.5" y1="-7.8" x2="1.5" y2="-7.8" width="0.127" layer="51"/>
+<wire x1="1.5" y1="-7.8" x2="1.5" y2="-4.8" width="0.127" layer="51"/>
+<circle x="0" y="0" radius="5.0009" width="0.127" layer="51"/>
+<pad name="+" x="-5" y="-3.9" drill="0.8" diameter="1.6764"/>
+<pad name="-" x="-6.35" y="-2.54" drill="0.8" diameter="1.6764"/>
+<text x="-6.8" y="-2" size="1.27" layer="21">-</text>
+<text x="-4.7" y="-5.3" size="1.27" layer="21">+</text>
+</package>
+</packages>
+<symbols>
+<symbol name="MOTOR">
+<wire x1="-1.27" y1="3.81" x2="-1.27" y2="1.778" width="0.2032" layer="94"/>
+<wire x1="-1.27" y1="3.81" x2="0" y2="3.81" width="0.2032" layer="94"/>
+<wire x1="0" y1="3.81" x2="1.27" y2="3.81" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="3.81" x2="1.27" y2="1.778" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="1.27" y2="-1.778" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="0" y2="-3.81" width="0.2032" layer="94"/>
+<wire x1="0" y1="-3.81" x2="-1.27" y2="-3.81" width="0.2032" layer="94"/>
+<wire x1="-1.27" y1="-3.81" x2="-1.27" y2="-1.778" width="0.2032" layer="94"/>
+<wire x1="0" y1="5.08" x2="0" y2="3.81" width="0.1524" layer="94"/>
+<wire x1="0" y1="-5.08" x2="0" y2="-3.81" width="0.1524" layer="94"/>
+<wire x1="0.254" y1="3.302" x2="-0.254" y2="3.302" width="0.1524" layer="94"/>
+<wire x1="0" y1="3.556" x2="0" y2="3.048" width="0.1524" layer="94"/>
+<wire x1="0.254" y1="-3.302" x2="-0.254" y2="-3.302" width="0.1524" layer="94"/>
+<circle x="0" y="0" radius="2.032" width="0.254" layer="94"/>
+<text x="2.54" y="0" size="1.778" layer="95">&gt;NAME</text>
+<text x="2.54" y="-2.54" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="+" x="0" y="5.08" visible="off" length="point" rot="R270"/>
+<pin name="-" x="0" y="-5.08" visible="off" length="point" rot="R270"/>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="MOTOR">
+<description>&lt;b&gt;Vibration Motor- ROB-08449&lt;/b&gt;
+Physical dimension and wire connections for this powerful vibration motor. Motor has a self adhesive backing.</description>
+<gates>
+<gate name="G$1" symbol="MOTOR" x="0" y="0"/>
+</gates>
+<devices>
+<device name="10MM" package="VIBE-MOTOR-10MM">
+<connects>
+<connect gate="G$1" pin="+" pad="+"/>
+<connect gate="G$1" pin="-" pad="-"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
 </libraries>
 <attributes>
 </attributes>
@@ -1552,16 +1692,6 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <part name="TP8" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="TP9" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="TP10" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP11" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP12" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP13" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP14" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP15" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP16" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP17" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP18" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP19" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP20" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="U$1" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$2" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$3" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
@@ -1571,14 +1701,19 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <part name="U$9" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$10" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$11" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
-<part name="U$12" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$13" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$14" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$15" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$16" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
-<part name="U$17" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$18" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
-<part name="LED2" library="led" deviceset="F50360" device=""/>
+<part name="TP21" library="testpad" deviceset="TP" device="TP20R"/>
+<part name="R18" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
+<part name="TP22" library="testpad" deviceset="TP" device="TP20R"/>
+<part name="U$5" library="SparkFun-Connectors" deviceset="USB-MINIB" device="-5PIN"/>
+<part name="U$17" library="SparkFun-Electromechanical" deviceset="MOTOR" device="10MM"/>
+<part name="U$19" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
+<part name="U$20" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
+<part name="U$21" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -1615,33 +1750,28 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <instance part="TP8" gate="G$1" x="292.1" y="-12.7"/>
 <instance part="TP9" gate="G$1" x="297.18" y="-12.7"/>
 <instance part="TP10" gate="G$1" x="302.26" y="-12.7"/>
-<instance part="TP11" gate="G$1" x="228.6" y="-48.26"/>
-<instance part="TP12" gate="G$1" x="223.52" y="-48.26"/>
-<instance part="TP13" gate="G$1" x="218.44" y="-48.26"/>
-<instance part="TP14" gate="G$1" x="213.36" y="-48.26"/>
-<instance part="TP15" gate="G$1" x="208.28" y="-48.26"/>
-<instance part="TP16" gate="G$1" x="307.34" y="-12.7"/>
-<instance part="TP17" gate="G$1" x="312.42" y="-12.7"/>
-<instance part="TP18" gate="G$1" x="317.5" y="-12.7"/>
-<instance part="TP19" gate="G$1" x="322.58" y="-12.7"/>
-<instance part="TP20" gate="G$1" x="327.66" y="-12.7"/>
-<instance part="U$1" gate="G$1" x="48.26" y="2.54"/>
-<instance part="U$2" gate="G$1" x="53.34" y="2.54"/>
-<instance part="U$3" gate="G$1" x="58.42" y="2.54"/>
-<instance part="U$6" gate="G$1" x="73.66" y="2.54"/>
+<instance part="U$1" gate="G$1" x="53.34" y="2.54"/>
+<instance part="U$2" gate="G$1" x="58.42" y="2.54"/>
+<instance part="U$3" gate="G$1" x="63.5" y="2.54"/>
+<instance part="U$6" gate="G$1" x="68.58" y="2.54"/>
 <instance part="U$7" gate="G$1" x="78.74" y="2.54"/>
 <instance part="U$8" gate="G$1" x="83.82" y="2.54"/>
 <instance part="U$9" gate="G$1" x="88.9" y="2.54"/>
 <instance part="U$10" gate="G$1" x="93.98" y="2.54"/>
 <instance part="U$11" gate="G$1" x="99.06" y="2.54"/>
-<instance part="U$12" gate="G$1" x="104.14" y="2.54"/>
 <instance part="U$13" gate="G$1" x="238.76" y="-2.54"/>
 <instance part="U$14" gate="G$1" x="243.84" y="-2.54"/>
 <instance part="U$15" gate="G$1" x="251.46" y="-2.54"/>
 <instance part="U$16" gate="G$1" x="259.08" y="-2.54"/>
-<instance part="U$17" gate="G$1" x="266.7" y="-2.54"/>
 <instance part="U$18" gate="G$1" x="274.32" y="-2.54"/>
-<instance part="LED2" gate="G$1" x="203.2" y="0" rot="R180"/>
+<instance part="TP21" gate="G$1" x="109.22" y="-20.32"/>
+<instance part="R18" gate="G$1" x="40.64" y="-27.94"/>
+<instance part="TP22" gate="G$1" x="332.74" y="-12.7"/>
+<instance part="U$5" gate="G$1" x="208.28" y="-76.2" rot="R270"/>
+<instance part="U$17" gate="G$1" x="157.48" y="12.7" rot="R90"/>
+<instance part="U$19" gate="G$1" x="137.16" y="12.7" rot="R90"/>
+<instance part="U$20" gate="G$1" x="177.8" y="12.7" rot="R270"/>
+<instance part="U$21" gate="G$1" x="48.26" y="2.54"/>
 </instances>
 <busses>
 </busses>
@@ -1680,6 +1810,8 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="R19" gate="G$1" pin="1"/>
 <wire x1="35.56" y1="-66.04" x2="35.56" y2="-68.58" width="0.1524" layer="91"/>
 <wire x1="35.56" y1="-63.5" x2="35.56" y2="-66.04" width="0.1524" layer="91"/>
+<pinref part="R18" gate="G$1" pin="1"/>
+<wire x1="35.56" y1="-30.48" x2="35.56" y2="-27.94" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="GND" class="0">
@@ -1703,36 +1835,18 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="TP7" gate="G$1" pin="TP"/>
 <wire x1="292.1" y1="-15.24" x2="287.02" y2="-15.24" width="0.1524" layer="91"/>
 <wire x1="287.02" y1="-15.24" x2="281.94" y2="-15.24" width="0.1524" layer="91"/>
-<wire x1="266.7" y1="-15.24" x2="266.7" y2="-25.4" width="0.1524" layer="91"/>
-<wire x1="274.32" y1="-25.4" x2="266.7" y2="-25.4" width="0.1524" layer="91"/>
 <wire x1="259.08" y1="-15.24" x2="259.08" y2="-25.4" width="0.1524" layer="91"/>
-<wire x1="266.7" y1="-25.4" x2="259.08" y2="-25.4" width="0.1524" layer="91"/>
+<wire x1="274.32" y1="-25.4" x2="259.08" y2="-25.4" width="0.1524" layer="91"/>
 <wire x1="251.46" y1="-15.24" x2="251.46" y2="-25.4" width="0.1524" layer="91"/>
 <label x="251.46" y="-33.02" size="1.778" layer="95"/>
 <wire x1="251.46" y1="-25.4" x2="251.46" y2="-33.02" width="0.1524" layer="91"/>
 <wire x1="259.08" y1="-25.4" x2="251.46" y2="-25.4" width="0.1524" layer="91"/>
-<pinref part="TP16" gate="G$1" pin="TP"/>
-<wire x1="302.26" y1="-15.24" x2="307.34" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP17" gate="G$1" pin="TP"/>
-<wire x1="307.34" y1="-15.24" x2="312.42" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP18" gate="G$1" pin="TP"/>
-<wire x1="312.42" y1="-15.24" x2="317.5" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP19" gate="G$1" pin="TP"/>
-<wire x1="317.5" y1="-15.24" x2="322.58" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP20" gate="G$1" pin="TP"/>
-<wire x1="322.58" y1="-15.24" x2="327.66" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="302.26" y1="-15.24" x2="332.74" y2="-15.24" width="0.1524" layer="91"/>
 <wire x1="215.9" y1="-33.02" x2="251.46" y2="-33.02" width="0.1524" layer="91"/>
 <pinref part="U$15" gate="G$1" pin="SNAPPAD"/>
 <pinref part="U$16" gate="G$1" pin="SNAPPAD"/>
-<pinref part="U$17" gate="G$1" pin="SNAPPAD"/>
 <pinref part="U$18" gate="G$1" pin="SNAPPAD"/>
-<pinref part="LED2" gate="G$1" pin="BC"/>
-<pinref part="LED2" gate="G$1" pin="GC"/>
-<wire x1="198.12" y1="2.54" x2="203.2" y2="2.54" width="0.1524" layer="91"/>
-<pinref part="LED2" gate="G$1" pin="RC"/>
-<wire x1="203.2" y1="2.54" x2="208.28" y2="2.54" width="0.1524" layer="91"/>
-<wire x1="208.28" y1="2.54" x2="215.9" y2="2.54" width="0.1524" layer="91"/>
-<wire x1="215.9" y1="2.54" x2="215.9" y2="-5.08" width="0.1524" layer="91"/>
+<pinref part="TP22" gate="G$1" pin="TP"/>
 </segment>
 <segment>
 <pinref part="U$4" gate="G$1" pin="GND"/>
@@ -1744,77 +1858,67 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <wire x1="195.58" y1="-83.82" x2="139.7" y2="-83.82" width="0.1524" layer="91"/>
 <wire x1="139.7" y1="-83.82" x2="139.7" y2="-88.9" width="0.1524" layer="91"/>
 <label x="139.7" y="-88.9" size="1.778" layer="95"/>
+<pinref part="U$5" gate="G$1" pin="GND"/>
+<wire x1="208.28" y1="-73.66" x2="208.28" y2="-71.12" width="0.1524" layer="91"/>
+<wire x1="208.28" y1="-71.12" x2="195.58" y2="-71.12" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$1" class="0">
 <segment>
 <pinref part="LED1" gate="G$1" pin="BA"/>
 <pinref part="R15" gate="G$1" pin="2"/>
-<pinref part="LED2" gate="G$1" pin="BA"/>
-<wire x1="198.12" y1="-2.54" x2="200.66" y2="-2.54" width="0.1524" layer="91"/>
-<wire x1="200.66" y1="-2.54" x2="200.66" y2="-10.16" width="0.1524" layer="91"/>
-<wire x1="200.66" y1="-10.16" x2="198.12" y2="-10.16" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$2" class="0">
 <segment>
 <pinref part="LED1" gate="G$1" pin="GA"/>
 <pinref part="R16" gate="G$1" pin="2"/>
-<wire x1="203.2" y1="-10.16" x2="205.74" y2="-10.16" width="0.1524" layer="91"/>
-<wire x1="205.74" y1="-10.16" x2="205.74" y2="-2.54" width="0.1524" layer="91"/>
-<pinref part="LED2" gate="G$1" pin="GA"/>
-<wire x1="205.74" y1="-2.54" x2="203.2" y2="-2.54" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$17" class="0">
 <segment>
 <pinref part="LED1" gate="G$1" pin="RA"/>
 <pinref part="R17" gate="G$1" pin="2"/>
-<wire x1="208.28" y1="-10.16" x2="210.82" y2="-10.16" width="0.1524" layer="91"/>
-<wire x1="210.82" y1="-10.16" x2="210.82" y2="-2.54" width="0.1524" layer="91"/>
-<pinref part="LED2" gate="G$1" pin="RA"/>
-<wire x1="210.82" y1="-2.54" x2="208.28" y2="-2.54" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$4" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN2"/>
 <pinref part="R1" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-30.48" x2="48.26" y2="-30.48" width="0.1524" layer="91"/>
-<wire x1="48.26" y1="-30.48" x2="45.72" y2="-30.48" width="0.1524" layer="91"/>
-<wire x1="48.26" y1="-10.16" x2="48.26" y2="-30.48" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-30.48" x2="53.34" y2="-30.48" width="0.1524" layer="91"/>
 <pinref part="U$1" gate="G$1" pin="SNAPPAD"/>
+<wire x1="53.34" y1="-30.48" x2="45.72" y2="-30.48" width="0.1524" layer="91"/>
+<wire x1="53.34" y1="-10.16" x2="53.34" y2="-30.48" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$6" class="0">
 <segment>
 <pinref part="R2" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN3"/>
-<wire x1="45.72" y1="-33.02" x2="53.34" y2="-33.02" width="0.1524" layer="91"/>
-<wire x1="53.34" y1="-33.02" x2="147.32" y2="-33.02" width="0.1524" layer="91"/>
-<wire x1="53.34" y1="-10.16" x2="53.34" y2="-33.02" width="0.1524" layer="91"/>
+<wire x1="45.72" y1="-33.02" x2="58.42" y2="-33.02" width="0.1524" layer="91"/>
 <pinref part="U$2" gate="G$1" pin="SNAPPAD"/>
+<wire x1="58.42" y1="-33.02" x2="147.32" y2="-33.02" width="0.1524" layer="91"/>
+<wire x1="58.42" y1="-10.16" x2="58.42" y2="-33.02" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$7" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN4"/>
 <pinref part="R3" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-35.56" x2="58.42" y2="-35.56" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="-35.56" x2="45.72" y2="-35.56" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="-10.16" x2="58.42" y2="-35.56" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-35.56" x2="63.5" y2="-35.56" width="0.1524" layer="91"/>
 <pinref part="U$3" gate="G$1" pin="SNAPPAD"/>
+<wire x1="63.5" y1="-35.56" x2="45.72" y2="-35.56" width="0.1524" layer="91"/>
+<wire x1="63.5" y1="-10.16" x2="63.5" y2="-35.56" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$8" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN5"/>
 <pinref part="R4" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-38.1" x2="73.66" y2="-38.1" width="0.1524" layer="91"/>
-<wire x1="73.66" y1="-38.1" x2="45.72" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-38.1" x2="68.58" y2="-38.1" width="0.1524" layer="91"/>
 <pinref part="U$6" gate="G$1" pin="SNAPPAD"/>
-<junction x="73.66" y="-10.16"/>
-<wire x1="73.66" y1="-10.16" x2="73.66" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="68.58" y1="-38.1" x2="45.72" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="68.58" y1="-10.16" x2="68.58" y2="-38.1" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$9" class="0">
@@ -1822,10 +1926,9 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="R5" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN6"/>
 <wire x1="45.72" y1="-40.64" x2="78.74" y2="-40.64" width="0.1524" layer="91"/>
-<wire x1="78.74" y1="-40.64" x2="147.32" y2="-40.64" width="0.1524" layer="91"/>
 <pinref part="U$7" gate="G$1" pin="SNAPPAD"/>
+<wire x1="78.74" y1="-40.64" x2="147.32" y2="-40.64" width="0.1524" layer="91"/>
 <wire x1="78.74" y1="-10.16" x2="78.74" y2="-40.64" width="0.1524" layer="91"/>
-<junction x="78.74" y="-10.16"/>
 </segment>
 </net>
 <net name="N$12" class="0">
@@ -1833,9 +1936,9 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="U$4" gate="G$1" pin="IN7"/>
 <pinref part="R6" gate="G$1" pin="2"/>
 <wire x1="147.32" y1="-43.18" x2="83.82" y2="-43.18" width="0.1524" layer="91"/>
+<pinref part="U$8" gate="G$1" pin="SNAPPAD"/>
 <wire x1="83.82" y1="-43.18" x2="45.72" y2="-43.18" width="0.1524" layer="91"/>
 <wire x1="83.82" y1="-10.16" x2="83.82" y2="-43.18" width="0.1524" layer="91"/>
-<pinref part="U$8" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$13" class="0">
@@ -1843,9 +1946,9 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="R7" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN8"/>
 <wire x1="45.72" y1="-45.72" x2="88.9" y2="-45.72" width="0.1524" layer="91"/>
+<pinref part="U$9" gate="G$1" pin="SNAPPAD"/>
 <wire x1="88.9" y1="-45.72" x2="147.32" y2="-45.72" width="0.1524" layer="91"/>
 <wire x1="88.9" y1="-10.16" x2="88.9" y2="-45.72" width="0.1524" layer="91"/>
-<pinref part="U$9" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$14" class="0">
@@ -1853,9 +1956,9 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="U$4" gate="G$1" pin="IN9"/>
 <pinref part="R8" gate="G$1" pin="2"/>
 <wire x1="147.32" y1="-48.26" x2="93.98" y2="-48.26" width="0.1524" layer="91"/>
+<pinref part="U$10" gate="G$1" pin="SNAPPAD"/>
 <wire x1="93.98" y1="-48.26" x2="45.72" y2="-48.26" width="0.1524" layer="91"/>
 <wire x1="93.98" y1="-10.16" x2="93.98" y2="-48.26" width="0.1524" layer="91"/>
-<pinref part="U$10" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$15" class="0">
@@ -1863,19 +1966,19 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <pinref part="R9" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN10"/>
 <wire x1="45.72" y1="-50.8" x2="99.06" y2="-50.8" width="0.1524" layer="91"/>
+<pinref part="U$11" gate="G$1" pin="SNAPPAD"/>
 <wire x1="99.06" y1="-50.8" x2="147.32" y2="-50.8" width="0.1524" layer="91"/>
 <wire x1="99.06" y1="-10.16" x2="99.06" y2="-50.8" width="0.1524" layer="91"/>
-<pinref part="U$11" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$16" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN11"/>
 <pinref part="R10" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-53.34" x2="104.14" y2="-53.34" width="0.1524" layer="91"/>
-<wire x1="104.14" y1="-53.34" x2="45.72" y2="-53.34" width="0.1524" layer="91"/>
-<wire x1="104.14" y1="-10.16" x2="104.14" y2="-53.34" width="0.1524" layer="91"/>
-<pinref part="U$12" gate="G$1" pin="SNAPPAD"/>
+<wire x1="147.32" y1="-53.34" x2="109.22" y2="-53.34" width="0.1524" layer="91"/>
+<pinref part="TP21" gate="G$1" pin="TP"/>
+<wire x1="109.22" y1="-53.34" x2="45.72" y2="-53.34" width="0.1524" layer="91"/>
+<wire x1="109.22" y1="-22.86" x2="109.22" y2="-53.34" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$18" class="0">
@@ -1968,43 +2071,37 @@ new: Attribute TP_SIGNAL_NAME&lt;br&gt;
 <wire x1="208.28" y1="-27.94" x2="208.28" y2="-20.32" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$26" class="0">
+<net name="N$40" class="0">
 <segment>
-<pinref part="U$4" gate="G$1" pin="OUT14"/>
-<wire x1="187.96" y1="-60.96" x2="228.6" y2="-60.96" width="0.1524" layer="91"/>
-<pinref part="TP11" gate="G$1" pin="TP"/>
-<wire x1="228.6" y1="-60.96" x2="228.6" y2="-50.8" width="0.1524" layer="91"/>
+<pinref part="U$4" gate="G$1" pin="IN1"/>
+<wire x1="139.7" y1="-27.94" x2="147.32" y2="-27.94" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-27.94" x2="48.26" y2="-27.94" width="0.1524" layer="91"/>
+<pinref part="R18" gate="G$1" pin="2"/>
+<pinref part="U$21" gate="G$1" pin="SNAPPAD"/>
+<wire x1="48.26" y1="-27.94" x2="45.72" y2="-27.94" width="0.1524" layer="91"/>
+<wire x1="48.26" y1="-10.16" x2="48.26" y2="-27.94" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$29" class="0">
+<net name="N$33" class="0">
 <segment>
-<pinref part="TP12" gate="G$1" pin="TP"/>
-<wire x1="223.52" y1="-50.8" x2="223.52" y2="-58.42" width="0.1524" layer="91"/>
-<pinref part="U$4" gate="G$1" pin="OUT13"/>
-<wire x1="223.52" y1="-58.42" x2="187.96" y2="-58.42" width="0.1524" layer="91"/>
+<pinref part="U$4" gate="G$1" pin="VBATT"/>
+<pinref part="U$5" gate="G$1" pin="VBUS"/>
+<wire x1="187.96" y1="-68.58" x2="218.44" y2="-68.58" width="0.1524" layer="91"/>
+<wire x1="218.44" y1="-68.58" x2="218.44" y2="-73.66" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$30" class="0">
+<net name="N$38" class="0">
 <segment>
-<pinref part="U$4" gate="G$1" pin="OUT12"/>
-<wire x1="187.96" y1="-55.88" x2="218.44" y2="-55.88" width="0.1524" layer="91"/>
-<pinref part="TP13" gate="G$1" pin="TP"/>
-<wire x1="218.44" y1="-55.88" x2="218.44" y2="-50.8" width="0.1524" layer="91"/>
+<pinref part="U$19" gate="G$1" pin="SNAPPAD"/>
+<pinref part="U$17" gate="G$1" pin="+"/>
+<wire x1="149.86" y1="12.7" x2="152.4" y2="12.7" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$31" class="0">
+<net name="N$46" class="0">
 <segment>
-<pinref part="TP14" gate="G$1" pin="TP"/>
-<wire x1="213.36" y1="-50.8" x2="213.36" y2="-53.34" width="0.1524" layer="91"/>
-<pinref part="U$4" gate="G$1" pin="OUT11"/>
-<wire x1="213.36" y1="-53.34" x2="187.96" y2="-53.34" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$32" class="0">
-<segment>
-<pinref part="U$4" gate="G$1" pin="OUT10"/>
-<pinref part="TP15" gate="G$1" pin="TP"/>
-<wire x1="187.96" y1="-50.8" x2="208.28" y2="-50.8" width="0.1524" layer="91"/>
+<pinref part="U$17" gate="G$1" pin="-"/>
+<pinref part="U$20" gate="G$1" pin="SNAPPAD"/>
+<wire x1="162.56" y1="12.7" x2="165.1" y2="12.7" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>

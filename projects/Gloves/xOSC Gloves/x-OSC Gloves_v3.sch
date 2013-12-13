@@ -1591,6 +1591,67 @@ Also added pins to connect to mounting / shield pads if required (probably not g
 </deviceset>
 </devicesets>
 </library>
+<library name="SparkFun-Electromechanical">
+<description>&lt;h3&gt;SparkFun Electronics' preferred foot prints&lt;/h3&gt;
+In this library you'll find anything that moves- switches, relays, buttons, potentiometers. Also, anything that goes on a board but isn't electrical in nature- screws, standoffs, etc.&lt;br&gt;&lt;br&gt;
+We've spent an enormous amount of time creating and checking these footprints and parts, but it is the end user's responsibility to ensure correctness and suitablity for a given componet or application. If you enjoy using this library, please buy one of our products at www.sparkfun.com.
+&lt;br&gt;&lt;br&gt;
+&lt;b&gt;Licensing:&lt;/b&gt; CC v3.0 Share-Alike You are welcome to use this library for commercial purposes. For attribution, we ask that when you begin to sell your device using our footprint, you email us with a link to the product being sold. We want bragging rights that we helped (in a very small part) to create your 8th world wonder. We would like the opportunity to feature your device on our homepage.</description>
+<packages>
+<package name="VIBE-MOTOR-10MM">
+<wire x1="-1.5" y1="-4.8" x2="-1.5" y2="-7.8" width="0.127" layer="51"/>
+<wire x1="-1.5" y1="-7.8" x2="1.5" y2="-7.8" width="0.127" layer="51"/>
+<wire x1="1.5" y1="-7.8" x2="1.5" y2="-4.8" width="0.127" layer="51"/>
+<circle x="0" y="0" radius="5.0009" width="0.127" layer="51"/>
+<pad name="+" x="-5" y="-3.9" drill="0.8" diameter="1.6764"/>
+<pad name="-" x="-6.35" y="-2.54" drill="0.8" diameter="1.6764"/>
+<text x="-6.8" y="-2" size="1.27" layer="21">-</text>
+<text x="-4.7" y="-5.3" size="1.27" layer="21">+</text>
+</package>
+</packages>
+<symbols>
+<symbol name="MOTOR">
+<wire x1="-1.27" y1="3.81" x2="-1.27" y2="1.778" width="0.2032" layer="94"/>
+<wire x1="-1.27" y1="3.81" x2="0" y2="3.81" width="0.2032" layer="94"/>
+<wire x1="0" y1="3.81" x2="1.27" y2="3.81" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="3.81" x2="1.27" y2="1.778" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="1.27" y2="-1.778" width="0.2032" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="0" y2="-3.81" width="0.2032" layer="94"/>
+<wire x1="0" y1="-3.81" x2="-1.27" y2="-3.81" width="0.2032" layer="94"/>
+<wire x1="-1.27" y1="-3.81" x2="-1.27" y2="-1.778" width="0.2032" layer="94"/>
+<wire x1="0" y1="5.08" x2="0" y2="3.81" width="0.1524" layer="94"/>
+<wire x1="0" y1="-5.08" x2="0" y2="-3.81" width="0.1524" layer="94"/>
+<wire x1="0.254" y1="3.302" x2="-0.254" y2="3.302" width="0.1524" layer="94"/>
+<wire x1="0" y1="3.556" x2="0" y2="3.048" width="0.1524" layer="94"/>
+<wire x1="0.254" y1="-3.302" x2="-0.254" y2="-3.302" width="0.1524" layer="94"/>
+<circle x="0" y="0" radius="2.032" width="0.254" layer="94"/>
+<text x="2.54" y="0" size="1.778" layer="95">&gt;NAME</text>
+<text x="2.54" y="-2.54" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="+" x="0" y="5.08" visible="off" length="point" rot="R270"/>
+<pin name="-" x="0" y="-5.08" visible="off" length="point" rot="R270"/>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="MOTOR">
+<description>&lt;b&gt;Vibration Motor- ROB-08449&lt;/b&gt;
+Physical dimension and wire connections for this powerful vibration motor. Motor has a self adhesive backing.</description>
+<gates>
+<gate name="G$1" symbol="MOTOR" x="0" y="0"/>
+</gates>
+<devices>
+<device name="10MM" package="VIBE-MOTOR-10MM">
+<connects>
+<connect gate="G$1" pin="+" pad="+"/>
+<connect gate="G$1" pin="-" pad="-"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
 </libraries>
 <attributes>
 </attributes>
@@ -1660,6 +1721,9 @@ Also added pins to connect to mounting / shield pads if required (probably not g
 <part name="R18" library="SparkFun-Passives" deviceset="RESISTOR" device="0805-RES"/>
 <part name="TP22" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="U$5" library="SparkFun-Connectors" deviceset="USB-MINIB" device="-5PIN"/>
+<part name="U$17" library="SparkFun-Electromechanical" deviceset="MOTOR" device="10MM"/>
+<part name="U$19" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
+<part name="U$20" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -1725,6 +1789,9 @@ Also added pins to connect to mounting / shield pads if required (probably not g
 <instance part="R18" gate="G$1" x="40.64" y="-27.94"/>
 <instance part="TP22" gate="G$1" x="332.74" y="-12.7"/>
 <instance part="U$5" gate="G$1" x="208.28" y="-76.2" rot="R270"/>
+<instance part="U$17" gate="G$1" x="157.48" y="12.7" rot="R90"/>
+<instance part="U$19" gate="G$1" x="137.16" y="12.7" rot="R90"/>
+<instance part="U$20" gate="G$1" x="177.8" y="12.7" rot="R270"/>
 </instances>
 <busses>
 </busses>
@@ -2091,6 +2158,20 @@ Also added pins to connect to mounting / shield pads if required (probably not g
 <pinref part="U$5" gate="G$1" pin="VBUS"/>
 <wire x1="187.96" y1="-68.58" x2="218.44" y2="-68.58" width="0.1524" layer="91"/>
 <wire x1="218.44" y1="-68.58" x2="218.44" y2="-73.66" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$38" class="0">
+<segment>
+<pinref part="U$19" gate="G$1" pin="SNAPPAD"/>
+<pinref part="U$17" gate="G$1" pin="+"/>
+<wire x1="149.86" y1="12.7" x2="152.4" y2="12.7" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$46" class="0">
+<segment>
+<pinref part="U$17" gate="G$1" pin="-"/>
+<pinref part="U$20" gate="G$1" pin="SNAPPAD"/>
+<wire x1="162.56" y1="12.7" x2="165.1" y2="12.7" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
