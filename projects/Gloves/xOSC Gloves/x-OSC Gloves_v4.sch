@@ -1692,16 +1692,6 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <part name="TP8" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="TP9" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="TP10" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP11" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP12" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP13" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP14" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP15" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP16" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP17" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP18" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP19" library="testpad" deviceset="TP" device="TP20R"/>
-<part name="TP20" library="testpad" deviceset="TP" device="TP20R"/>
 <part name="U$1" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$2" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$3" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
@@ -1711,7 +1701,6 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <part name="U$9" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$10" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$11" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
-<part name="U$12" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$13" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$14" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$15" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
@@ -1724,6 +1713,7 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <part name="U$17" library="SparkFun-Electromechanical" deviceset="MOTOR" device="10MM"/>
 <part name="U$19" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 <part name="U$20" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
+<part name="U$21" library="hannahsEagleLib" deviceset="SNAP-PAD_7MM_ROUND" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -1760,38 +1750,28 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <instance part="TP8" gate="G$1" x="292.1" y="-12.7"/>
 <instance part="TP9" gate="G$1" x="297.18" y="-12.7"/>
 <instance part="TP10" gate="G$1" x="302.26" y="-12.7"/>
-<instance part="TP11" gate="G$1" x="228.6" y="-48.26"/>
-<instance part="TP12" gate="G$1" x="223.52" y="-48.26"/>
-<instance part="TP13" gate="G$1" x="218.44" y="-48.26"/>
-<instance part="TP14" gate="G$1" x="213.36" y="-48.26"/>
-<instance part="TP15" gate="G$1" x="208.28" y="-48.26"/>
-<instance part="TP16" gate="G$1" x="307.34" y="-12.7"/>
-<instance part="TP17" gate="G$1" x="312.42" y="-12.7"/>
-<instance part="TP18" gate="G$1" x="317.5" y="-12.7"/>
-<instance part="TP19" gate="G$1" x="322.58" y="-12.7"/>
-<instance part="TP20" gate="G$1" x="327.66" y="-12.7"/>
-<instance part="U$1" gate="G$1" x="48.26" y="2.54"/>
-<instance part="U$2" gate="G$1" x="53.34" y="2.54"/>
-<instance part="U$3" gate="G$1" x="58.42" y="2.54"/>
-<instance part="U$6" gate="G$1" x="73.66" y="2.54"/>
+<instance part="U$1" gate="G$1" x="53.34" y="2.54"/>
+<instance part="U$2" gate="G$1" x="58.42" y="2.54"/>
+<instance part="U$3" gate="G$1" x="63.5" y="2.54"/>
+<instance part="U$6" gate="G$1" x="68.58" y="2.54"/>
 <instance part="U$7" gate="G$1" x="78.74" y="2.54"/>
 <instance part="U$8" gate="G$1" x="83.82" y="2.54"/>
 <instance part="U$9" gate="G$1" x="88.9" y="2.54"/>
 <instance part="U$10" gate="G$1" x="93.98" y="2.54"/>
 <instance part="U$11" gate="G$1" x="99.06" y="2.54"/>
-<instance part="U$12" gate="G$1" x="104.14" y="2.54"/>
 <instance part="U$13" gate="G$1" x="238.76" y="-2.54"/>
 <instance part="U$14" gate="G$1" x="243.84" y="-2.54"/>
 <instance part="U$15" gate="G$1" x="251.46" y="-2.54"/>
 <instance part="U$16" gate="G$1" x="259.08" y="-2.54"/>
 <instance part="U$18" gate="G$1" x="274.32" y="-2.54"/>
-<instance part="TP21" gate="G$1" x="139.7" y="-20.32"/>
+<instance part="TP21" gate="G$1" x="109.22" y="-20.32"/>
 <instance part="R18" gate="G$1" x="40.64" y="-27.94"/>
 <instance part="TP22" gate="G$1" x="332.74" y="-12.7"/>
 <instance part="U$5" gate="G$1" x="208.28" y="-76.2" rot="R270"/>
 <instance part="U$17" gate="G$1" x="157.48" y="12.7" rot="R90"/>
 <instance part="U$19" gate="G$1" x="137.16" y="12.7" rot="R90"/>
 <instance part="U$20" gate="G$1" x="177.8" y="12.7" rot="R270"/>
+<instance part="U$21" gate="G$1" x="48.26" y="2.54"/>
 </instances>
 <busses>
 </busses>
@@ -1861,22 +1841,12 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <label x="251.46" y="-33.02" size="1.778" layer="95"/>
 <wire x1="251.46" y1="-25.4" x2="251.46" y2="-33.02" width="0.1524" layer="91"/>
 <wire x1="259.08" y1="-25.4" x2="251.46" y2="-25.4" width="0.1524" layer="91"/>
-<pinref part="TP16" gate="G$1" pin="TP"/>
-<wire x1="302.26" y1="-15.24" x2="307.34" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP17" gate="G$1" pin="TP"/>
-<wire x1="307.34" y1="-15.24" x2="312.42" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP18" gate="G$1" pin="TP"/>
-<wire x1="312.42" y1="-15.24" x2="317.5" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP19" gate="G$1" pin="TP"/>
-<wire x1="317.5" y1="-15.24" x2="322.58" y2="-15.24" width="0.1524" layer="91"/>
-<pinref part="TP20" gate="G$1" pin="TP"/>
-<wire x1="322.58" y1="-15.24" x2="327.66" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="302.26" y1="-15.24" x2="332.74" y2="-15.24" width="0.1524" layer="91"/>
 <wire x1="215.9" y1="-33.02" x2="251.46" y2="-33.02" width="0.1524" layer="91"/>
 <pinref part="U$15" gate="G$1" pin="SNAPPAD"/>
 <pinref part="U$16" gate="G$1" pin="SNAPPAD"/>
 <pinref part="U$18" gate="G$1" pin="SNAPPAD"/>
 <pinref part="TP22" gate="G$1" pin="TP"/>
-<wire x1="327.66" y1="-15.24" x2="332.74" y2="-15.24" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="U$4" gate="G$1" pin="GND"/>
@@ -1915,41 +1885,40 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN2"/>
 <pinref part="R1" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-30.48" x2="48.26" y2="-30.48" width="0.1524" layer="91"/>
-<wire x1="48.26" y1="-30.48" x2="45.72" y2="-30.48" width="0.1524" layer="91"/>
-<wire x1="48.26" y1="-10.16" x2="48.26" y2="-30.48" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-30.48" x2="53.34" y2="-30.48" width="0.1524" layer="91"/>
 <pinref part="U$1" gate="G$1" pin="SNAPPAD"/>
+<wire x1="53.34" y1="-30.48" x2="45.72" y2="-30.48" width="0.1524" layer="91"/>
+<wire x1="53.34" y1="-10.16" x2="53.34" y2="-30.48" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$6" class="0">
 <segment>
 <pinref part="R2" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN3"/>
-<wire x1="45.72" y1="-33.02" x2="53.34" y2="-33.02" width="0.1524" layer="91"/>
-<wire x1="53.34" y1="-33.02" x2="147.32" y2="-33.02" width="0.1524" layer="91"/>
-<wire x1="53.34" y1="-10.16" x2="53.34" y2="-33.02" width="0.1524" layer="91"/>
+<wire x1="45.72" y1="-33.02" x2="58.42" y2="-33.02" width="0.1524" layer="91"/>
 <pinref part="U$2" gate="G$1" pin="SNAPPAD"/>
+<wire x1="58.42" y1="-33.02" x2="147.32" y2="-33.02" width="0.1524" layer="91"/>
+<wire x1="58.42" y1="-10.16" x2="58.42" y2="-33.02" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$7" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN4"/>
 <pinref part="R3" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-35.56" x2="58.42" y2="-35.56" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="-35.56" x2="45.72" y2="-35.56" width="0.1524" layer="91"/>
-<wire x1="58.42" y1="-10.16" x2="58.42" y2="-35.56" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-35.56" x2="63.5" y2="-35.56" width="0.1524" layer="91"/>
 <pinref part="U$3" gate="G$1" pin="SNAPPAD"/>
+<wire x1="63.5" y1="-35.56" x2="45.72" y2="-35.56" width="0.1524" layer="91"/>
+<wire x1="63.5" y1="-10.16" x2="63.5" y2="-35.56" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$8" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN5"/>
 <pinref part="R4" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-38.1" x2="73.66" y2="-38.1" width="0.1524" layer="91"/>
-<wire x1="73.66" y1="-38.1" x2="45.72" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-38.1" x2="68.58" y2="-38.1" width="0.1524" layer="91"/>
 <pinref part="U$6" gate="G$1" pin="SNAPPAD"/>
-<junction x="73.66" y="-10.16"/>
-<wire x1="73.66" y1="-10.16" x2="73.66" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="68.58" y1="-38.1" x2="45.72" y2="-38.1" width="0.1524" layer="91"/>
+<wire x1="68.58" y1="-10.16" x2="68.58" y2="-38.1" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$9" class="0">
@@ -1957,10 +1926,9 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <pinref part="R5" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN6"/>
 <wire x1="45.72" y1="-40.64" x2="78.74" y2="-40.64" width="0.1524" layer="91"/>
-<wire x1="78.74" y1="-40.64" x2="147.32" y2="-40.64" width="0.1524" layer="91"/>
 <pinref part="U$7" gate="G$1" pin="SNAPPAD"/>
+<wire x1="78.74" y1="-40.64" x2="147.32" y2="-40.64" width="0.1524" layer="91"/>
 <wire x1="78.74" y1="-10.16" x2="78.74" y2="-40.64" width="0.1524" layer="91"/>
-<junction x="78.74" y="-10.16"/>
 </segment>
 </net>
 <net name="N$12" class="0">
@@ -1968,9 +1936,9 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <pinref part="U$4" gate="G$1" pin="IN7"/>
 <pinref part="R6" gate="G$1" pin="2"/>
 <wire x1="147.32" y1="-43.18" x2="83.82" y2="-43.18" width="0.1524" layer="91"/>
+<pinref part="U$8" gate="G$1" pin="SNAPPAD"/>
 <wire x1="83.82" y1="-43.18" x2="45.72" y2="-43.18" width="0.1524" layer="91"/>
 <wire x1="83.82" y1="-10.16" x2="83.82" y2="-43.18" width="0.1524" layer="91"/>
-<pinref part="U$8" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$13" class="0">
@@ -1978,9 +1946,9 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <pinref part="R7" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN8"/>
 <wire x1="45.72" y1="-45.72" x2="88.9" y2="-45.72" width="0.1524" layer="91"/>
+<pinref part="U$9" gate="G$1" pin="SNAPPAD"/>
 <wire x1="88.9" y1="-45.72" x2="147.32" y2="-45.72" width="0.1524" layer="91"/>
 <wire x1="88.9" y1="-10.16" x2="88.9" y2="-45.72" width="0.1524" layer="91"/>
-<pinref part="U$9" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$14" class="0">
@@ -1988,9 +1956,9 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <pinref part="U$4" gate="G$1" pin="IN9"/>
 <pinref part="R8" gate="G$1" pin="2"/>
 <wire x1="147.32" y1="-48.26" x2="93.98" y2="-48.26" width="0.1524" layer="91"/>
+<pinref part="U$10" gate="G$1" pin="SNAPPAD"/>
 <wire x1="93.98" y1="-48.26" x2="45.72" y2="-48.26" width="0.1524" layer="91"/>
 <wire x1="93.98" y1="-10.16" x2="93.98" y2="-48.26" width="0.1524" layer="91"/>
-<pinref part="U$10" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$15" class="0">
@@ -1998,19 +1966,19 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <pinref part="R9" gate="G$1" pin="2"/>
 <pinref part="U$4" gate="G$1" pin="IN10"/>
 <wire x1="45.72" y1="-50.8" x2="99.06" y2="-50.8" width="0.1524" layer="91"/>
+<pinref part="U$11" gate="G$1" pin="SNAPPAD"/>
 <wire x1="99.06" y1="-50.8" x2="147.32" y2="-50.8" width="0.1524" layer="91"/>
 <wire x1="99.06" y1="-10.16" x2="99.06" y2="-50.8" width="0.1524" layer="91"/>
-<pinref part="U$11" gate="G$1" pin="SNAPPAD"/>
 </segment>
 </net>
 <net name="N$16" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="IN11"/>
 <pinref part="R10" gate="G$1" pin="2"/>
-<wire x1="147.32" y1="-53.34" x2="104.14" y2="-53.34" width="0.1524" layer="91"/>
-<wire x1="104.14" y1="-53.34" x2="45.72" y2="-53.34" width="0.1524" layer="91"/>
-<wire x1="104.14" y1="-10.16" x2="104.14" y2="-53.34" width="0.1524" layer="91"/>
-<pinref part="U$12" gate="G$1" pin="SNAPPAD"/>
+<wire x1="147.32" y1="-53.34" x2="109.22" y2="-53.34" width="0.1524" layer="91"/>
+<pinref part="TP21" gate="G$1" pin="TP"/>
+<wire x1="109.22" y1="-53.34" x2="45.72" y2="-53.34" width="0.1524" layer="91"/>
+<wire x1="109.22" y1="-22.86" x2="109.22" y2="-53.34" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$18" class="0">
@@ -2103,53 +2071,15 @@ Physical dimension and wire connections for this powerful vibration motor. Motor
 <wire x1="208.28" y1="-27.94" x2="208.28" y2="-20.32" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$26" class="0">
-<segment>
-<pinref part="U$4" gate="G$1" pin="OUT14"/>
-<wire x1="187.96" y1="-60.96" x2="228.6" y2="-60.96" width="0.1524" layer="91"/>
-<pinref part="TP11" gate="G$1" pin="TP"/>
-<wire x1="228.6" y1="-60.96" x2="228.6" y2="-50.8" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$29" class="0">
-<segment>
-<pinref part="TP12" gate="G$1" pin="TP"/>
-<wire x1="223.52" y1="-50.8" x2="223.52" y2="-58.42" width="0.1524" layer="91"/>
-<pinref part="U$4" gate="G$1" pin="OUT13"/>
-<wire x1="223.52" y1="-58.42" x2="187.96" y2="-58.42" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$30" class="0">
-<segment>
-<pinref part="U$4" gate="G$1" pin="OUT12"/>
-<wire x1="187.96" y1="-55.88" x2="218.44" y2="-55.88" width="0.1524" layer="91"/>
-<pinref part="TP13" gate="G$1" pin="TP"/>
-<wire x1="218.44" y1="-55.88" x2="218.44" y2="-50.8" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$31" class="0">
-<segment>
-<pinref part="TP14" gate="G$1" pin="TP"/>
-<wire x1="213.36" y1="-50.8" x2="213.36" y2="-53.34" width="0.1524" layer="91"/>
-<pinref part="U$4" gate="G$1" pin="OUT11"/>
-<wire x1="213.36" y1="-53.34" x2="187.96" y2="-53.34" width="0.1524" layer="91"/>
-</segment>
-</net>
-<net name="N$32" class="0">
-<segment>
-<pinref part="U$4" gate="G$1" pin="OUT10"/>
-<pinref part="TP15" gate="G$1" pin="TP"/>
-<wire x1="187.96" y1="-50.8" x2="208.28" y2="-50.8" width="0.1524" layer="91"/>
-</segment>
-</net>
 <net name="N$40" class="0">
 <segment>
-<pinref part="TP21" gate="G$1" pin="TP"/>
-<wire x1="139.7" y1="-22.86" x2="139.7" y2="-27.94" width="0.1524" layer="91"/>
 <pinref part="U$4" gate="G$1" pin="IN1"/>
 <wire x1="139.7" y1="-27.94" x2="147.32" y2="-27.94" width="0.1524" layer="91"/>
-<wire x1="147.32" y1="-27.94" x2="45.72" y2="-27.94" width="0.1524" layer="91"/>
+<wire x1="147.32" y1="-27.94" x2="48.26" y2="-27.94" width="0.1524" layer="91"/>
 <pinref part="R18" gate="G$1" pin="2"/>
+<pinref part="U$21" gate="G$1" pin="SNAPPAD"/>
+<wire x1="48.26" y1="-27.94" x2="45.72" y2="-27.94" width="0.1524" layer="91"/>
+<wire x1="48.26" y1="-10.16" x2="48.26" y2="-27.94" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$33" class="0">
