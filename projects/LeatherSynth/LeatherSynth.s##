@@ -6957,8 +6957,8 @@ Simple SMD single-pull double-throw slide switch. Good for  less than 350mA powe
 <text x="111.76" y="48.26" size="1.778" layer="91">+9V</text>
 <text x="-27.94" y="129.54" size="1.778" layer="91">+9V</text>
 <text x="20.32" y="129.54" size="1.778" layer="91">+9V</text>
-<text x="205.74" y="129.54" size="1.778" layer="91">SPEAKER OUT</text>
-<text x="215.9" y="2.54" size="1.778" layer="91">SPEAKER GND</text>
+<text x="208.28" y="114.3" size="1.778" layer="91">SPEAKER OUT</text>
+<text x="218.44" y="5.08" size="1.778" layer="91">SPEAKER GND</text>
 </plain>
 <instances>
 <instance part="IC1" gate="A" x="111.76" y="30.48"/>
