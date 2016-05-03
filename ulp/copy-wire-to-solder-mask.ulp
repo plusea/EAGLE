@@ -1,6 +1,6 @@
 #usage "<qt><b>Copy Wire (Polygon Wire) to any layer</b><p>"
        "This ULP copies copper wire and/or polygon from layer (1 or 16) of selected signals into "
-       "the solderstop layers or any layer in order to keep it free from solder stop layer.<p>"
+       "the solder stop layers or any layer in order to keep it free from solder stop layer.<p>"
        "Use:<br><nobr>"
        "run copy-wire-to-solder-mask.ulp [signalname] [signalname] <br>"
        "run copy-wire-to-solder-mask.ulp $nameoff$<br>"
@@ -24,7 +24,8 @@ string Version = "ULP-Version: 1.5"; //  2008-04-23 check is a polygon placed
                                      //  changed menu to copy to any layer
                                      //  2009-01-28 check polygon filling on orphan alf@cadsoft.de
                                      //  2009-04-23 check menu parameter
-									 //  2009-06-30 correct polygon export
+                                     //  2009-06-30 correct polygon export
+                                     //  2016-05-02 Modified by Rod Dines to account for curve
 
 
 int    NameOff     = 0;    // 0 = copy by signal name
@@ -49,6 +50,7 @@ int    decs;
 
 int    index[];
 int    x1[], y1[], x2[], y2[], layer[];
+real   Wcurve[]; // // ########## MODIFIED ########## 2016-05-02 Modified by Rod Dines to account for curve
 int    Wwidth[];
 int    n = 1;
 
@@ -181,6 +183,30 @@ void AddArgument(int n) {
   return;
 }
 
+// ####################===============MODIFIED============== ########################
+// 2016-05-02 Modified by Rod Dines as in Copied from copy-wire-to-any-layer.ulp
+// UL_WIRE
+// Data members
+// arc UL_ARC
+// cap int (CAP_...)
+// curve real
+// layer int
+// style int (WIRE_STYLE_...)
+// width int
+// x1, y1 int (starting point)
+// x2, y2 int (end point)
+// 2009-04-28 die print funktionen
+//void printW(UL_WIRE W) {
+//  if (W.layer == fromNumber) {
+//    sprintf(c, "WIRE %.4f (%.4f %.4f) %+.1f (%.4f %.4f);\n",
+//               u2mm(W.width),
+//               u2mm(W.x1), u2mm(W.y1), W.curve, u2mm(W.x2), u2mm(W.y2)
+//           );
+//    cmd+= c;
+//  }
+//  return;
+//}
+// ####################===============MODIFIED============== ########################
 
 void menue() {
   if (argc > 1) {
@@ -289,6 +315,7 @@ if (board) board(B) {
           if ((isLayer == "Top/Bottom" && (W.layer == 1 || W.layer == 16)) || isLayerNb == W.layer) { // 2009-04-23 alf
             x1[n] = W.x1;
             y1[n] = W.y1;
+            Wcurve[n] = W.curve;  // ########## MODIFIED ########## 2016-05-02 Modified by Rod Dines to account for curve
             x2[n] = W.x2;
             y2[n] = W.y2;
             Wwidth[n] = W.width;
@@ -302,7 +329,7 @@ if (board) board(B) {
           if (isLayer && (POL.layer == 1 || POL.layer == 16) || isLayerNb == POL.layer) { // 2009-06-30 alf
             string p;
             int startx, starty;
-			int first = 1;
+            int first = 1;
             Player[cntp] = POL.layer;
             POL.contours(W) {
               if (first) {
@@ -330,6 +357,7 @@ if (board) board(B) {
               POL.fillings(W) {
                 x1[n] = W.x1;
                 y1[n] = W.y1;
+                Wcurve[n] = W.curve;  // ########## MODIFIED ########## 2016-05-02 Modified by Rod Dines to account for curve
                 x2[n] = W.x2;
                 y2[n] = W.y2;
                 Wwidth[n] = W.width;
@@ -349,8 +377,12 @@ if (board) board(B) {
       dl = layer[index[i]];
       changeLayer(dl);
     }
-    sprintf(c, "WIRE %.4f (%.4f %.4f) (%.4f %.4f);\n", u2mm(Wwidth[index[i]]),
-                u2mm(x1[index[i]]), u2mm(y1[index[i]]), u2mm(x2[index[i]]), u2mm(y2[index[i]])  );
+// #################### MODIFIED ########################
+// 2016-05-02 Modified by Rod Dines to account for curve
+    sprintf(c, "WIRE %.4f (%.4f %.4f) %+.1f (%.4f %.4f);\n",
+               u2mm(Wwidth[index[i]]),
+               u2mm(x1[index[i]]), u2mm(y1[index[i]]), Wcurve[index[i]], u2mm(x2[index[i]]), u2mm(y2[index[i]])  );
+// #################### MODIFIED ########################
     cmd+= c;
   }
   sort(cntp, index, Player);
@@ -359,8 +391,12 @@ if (board) board(B) {
       dl = Player[index[i]];
       changeLayer(dl);
     }
-    sprintf(c, "WIRE %.4f (%.4f %.4f) (%.4f %.4f);\n", u2mm(Wwidth[index[i]]),
-                u2mm(x1[index[i]]), u2mm(y1[index[i]]), u2mm(x2[index[i]]), u2mm(y2[index[i]])  );
+// #################### MODIFIED ########################	
+// 2016-05-02 Modified by Rod Dines to account for curve
+	sprintf(c, "WIRE %.4f (%.4f %.4f) %+.1f (%.4f %.4f);\n",
+	           u2mm(Wwidth[index[i]]),
+                     u2mm(x1[index[i]]), u2mm(y1[index[i]]), Wcurve[index[i]], u2mm(x2[index[i]]), u2mm(y2[index[i]])  );
+// #################### MODIFIED ########################
     cmd+= poly[index[i]];
   }
   sprintf(c, "SET UNDO ON;\nGRID LAST;\n");
